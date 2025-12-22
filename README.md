@@ -2,7 +2,7 @@
 
 Bu proje, Spring Boot ve Mikroservis mimarisi kullanılarak geliştirilmiş, ölçeklenebilir bir online eğitim platformu (Udemy Klonu) altyapısıdır.
 
-## 🏗 Mimari Yapı
+## Mimari Yapı
 
 Proje **Multi-Module Maven** yapısına sahiptir:
 
@@ -12,7 +12,7 @@ Proje **Multi-Module Maven** yapısına sahiptir:
 * **order-service:** (PostgreSQL) Sipariş ve ödeme işlemleri (TSID).
 * **common:** Tüm servislerin kullandığı ortak kütüphaneler (DTOs, Exceptions).
 
-## 🛠 Teknoloji Stack'i
+## Teknoloji Stack'i
 
 * **Dil:** Java 21
 * **Framework:** Spring Boot 3.2.x, Spring Cloud 2023
@@ -20,6 +20,6 @@ Proje **Multi-Module Maven** yapısına sahiptir:
 * **Messaging:** RabbitMQ
 * **Build Tool:** Maven
 
-## 🚀 Kurulum
+## Kurulum
 
 (Buraya ileride Docker Compose komutlarını ekleyeceğiz)
