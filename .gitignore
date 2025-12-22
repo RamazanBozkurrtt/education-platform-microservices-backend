@@ -1,0 +1,26 @@
+# Maven
+target/
+*.jar
+*.war
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# Eclipse / VS Code
+.classpath
+.project
+.settings/
+.vscode/
+
+# İşletim Sistemi
+.DS_Store
+Thumbs.db
+
+# Loglar
+logs/
+*.log
+
+# Çevresel Değişkenler (GÜVENLİK İÇİN KRİTİK)
+.env
