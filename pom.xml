@@ -12,10 +12,8 @@
 
     <modules>
         <module>common</module>
-        <module>api-gateway</module>
         <module>auth-service</module>
-        <module>course-service</module>
-        <module>order-service</module>
+
     </modules>
 
     <properties>
