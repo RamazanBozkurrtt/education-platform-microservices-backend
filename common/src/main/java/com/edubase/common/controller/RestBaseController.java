@@ -1,5 +1,6 @@
 package com.edubase.common.controller;
 
+import com.edubase.common.utils.RestResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
