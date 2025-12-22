@@ -4,8 +4,6 @@ package com.edubase.auth.service.concretes;
 import com.edubase.auth.dto.RegisterRequest;
 import com.edubase.auth.entity.User;
 import com.edubase.auth.repository.UserRepository;
-import com.edubase.common.exceptions.BusinessException;
-import com.edubase.common.handling.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;

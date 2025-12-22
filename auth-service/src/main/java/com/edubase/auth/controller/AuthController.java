@@ -4,7 +4,6 @@ package com.edubase.auth.controller;
 import com.edubase.auth.dto.RegisterRequest;
 import com.edubase.auth.service.concretes.AuthenticationServiceImpl;
 import com.edubase.common.controller.RestBaseController;
-import com.edubase.common.utils.RestResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
