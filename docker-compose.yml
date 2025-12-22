@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # ----------------------------
+  # POSTGRESQL (Auth & Order DB)
+  # ----------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: edubase-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=edubase
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=edubase_auth_db # Varsayılan DB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # MONGODB (Course Service DB)
+  # ----------------------------
+  mongo:
+    image: mongo:6.0
+    container_name: edubase-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=edubase
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # REDIS (Caching)
+  # ----------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: edubase-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # RABBITMQ (Message Broker)
+  # ----------------------------
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: edubase-rabbitmq
+    ports:
+      - "5672:5672"   # Uygulama portu
+      - "15672:15672" # Yönetim paneli (UI)
+    environment:
+      - RABBITMQ_DEFAULT_USER=edubase
+      - RABBITMQ_DEFAULT_PASS=password
+    networks:
+      - edubase-network
+
+networks:
+  edubase-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
