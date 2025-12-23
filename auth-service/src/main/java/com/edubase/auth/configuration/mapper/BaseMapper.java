@@ -4,7 +4,7 @@ import java.util.List;
 
 public interface BaseMapper<E,D,U> {
 
-    E toEntityFromResponse(D Response);
+    E toEntityFromResponse(D response);
     D toResponseFromEntity(E entity);
     D toResponseFromRequest(U dto);
     E toEntityFromRequest(U dto);
