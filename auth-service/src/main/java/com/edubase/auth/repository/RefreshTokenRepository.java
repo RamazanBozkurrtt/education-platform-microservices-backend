@@ -6,6 +6,7 @@ import io.hypersistence.tsid.TSID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -22,7 +23,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken,Integ
     Optional<RefreshToken> findByRefreshToken(String refreshToken);
 
     @Query("SELECT rt FROM RefreshToken rt INNER JOIN rt.user u WHERE u.id = :userId AND rt.revoked = false")
-    List<RefreshToken> findAllValidRefreshTokenByUser(Long userId);
+    List<RefreshToken> findAllValidRefreshTokenByUser(@Param("userId") Long userId);
 
     void deleteByExpiryDateBefore(Instant expiryDateBefore);
 }

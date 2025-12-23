@@ -8,7 +8,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "role")
+@Table(name = "roles")
 @Getter
 @Setter
 @AllArgsConstructor
@@ -20,15 +20,16 @@ public class Role {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "role_seq")
     @SequenceGenerator(name = "role_seq", sequenceName = "role_seq", allocationSize = 1)
     @Column(name = "role_id")
-    Long id;
+    private Long id;
 
     @Column(nullable = false, unique = true)
     private String name;
 
-    @ManyToMany(mappedBy = "user_roles")
+    @ManyToMany(mappedBy = "roles")
     @ToString.Exclude
     private Set<User> users = new HashSet<>();
 
+    @Override
     public String  toString(){
         return name;
     }

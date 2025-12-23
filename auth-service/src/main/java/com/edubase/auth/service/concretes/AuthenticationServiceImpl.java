@@ -57,7 +57,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .isActive(true)
                 .locked(false)
-                .user_roles(new HashSet<>(Set.of(userRole)))
+                .roles(new HashSet<>(Set.of(userRole)))
                 .build();
         var userDB = userRepository.save(user);
         return userMapper.toResponseFromEntity(userDB);

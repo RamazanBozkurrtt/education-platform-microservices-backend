@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
@@ -25,10 +26,10 @@ public class JwtService {
     private String secretKey;
 
     @Value("${jwt.expiration}")
-    private Long jwtExpiration;
+    private Duration jwtExpiration;
 
     @Value("${jwt.refreshTokenExpiration}")
-    private Long refreshExpiration;
+    private Duration refreshExpiration;
 
     //+
     public String extractUsername(String token) {
@@ -50,7 +51,7 @@ public class JwtService {
             Map<String, Object> extraClaims,
             UserDetails userDetails
     ) {
-        return buildToken(extraClaims, userDetails, jwtExpiration);
+        return buildToken(extraClaims, userDetails, jwtExpiration.toMillis());
     }
 
     private String buildToken(
@@ -74,10 +75,10 @@ public class JwtService {
             User user
     ) {
         return RefreshToken.builder()
-                .refreshToken(buildToken(new HashMap<>(), new UserPrincipal(user), refreshExpiration))
+                .refreshToken(buildToken(new HashMap<>(), new UserPrincipal(user), refreshExpiration.toMillis()))
                 .revoked(false)
                 .user(user)
-                .expiryDate(Instant.now().plusMillis(refreshExpiration))
+                .expiryDate(Instant.now().plusMillis(refreshExpiration.toMillis()))
                 .build();
     }
 

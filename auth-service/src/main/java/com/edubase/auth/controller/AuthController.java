@@ -29,7 +29,7 @@ public class AuthController extends RestBaseController {
     }
 
     @PostMapping("/authenticate")
-    public ResponseEntity<RestResponse<AuthenticationResponse>> authenticate(@RequestBody AuthenticationRequest authenticationRequest) {
+    public ResponseEntity<RestResponse<AuthenticationResponse>> authenticate(@Valid @RequestBody AuthenticationRequest authenticationRequest) {
         return ok(authenticationServiceImpl.authenticate(authenticationRequest));
     }
 

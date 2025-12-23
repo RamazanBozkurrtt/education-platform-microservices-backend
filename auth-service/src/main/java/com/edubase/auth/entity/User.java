@@ -17,15 +17,11 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@AttributeOverride(
-        name = "id",
-        column = @Column(name = "user_id", insertable = false, updatable = false)
-)
 public class User {
 
     @Id
     @Tsid
-    @Column(name = "id", nullable = false,updatable = false)
+    @Column(name = "user_id", nullable = false,updatable = false)
     private Long id;
 
     @Column(nullable = false,unique = true)
@@ -50,7 +46,8 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     @ToString.Exclude
-    private Set<Role> user_roles = new HashSet<Role>();
+    @Builder.Default
+    private Set<Role> roles = new HashSet<Role>();
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -59,6 +56,7 @@ public class User {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    private boolean locked;
+    @Column(nullable = false)
+    private boolean locked = false;
 
 }
