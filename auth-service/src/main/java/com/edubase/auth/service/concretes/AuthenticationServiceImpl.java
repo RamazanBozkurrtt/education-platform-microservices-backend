@@ -49,7 +49,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         Role userRole = roleRepository.findByName(("ROLE_USER"))
                 .orElseThrow(()-> new BusinessException(ErrorCode.ROLE_NOT_FOUND));
 
-
         var user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())

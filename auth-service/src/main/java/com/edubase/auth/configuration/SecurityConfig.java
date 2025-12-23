@@ -26,8 +26,15 @@ public class SecurityConfig {
     private final AccessDeniedHandler accessDeniedHandler;
 
     private static final String[] WHITE_LIST_URL = {
-            "/api/v1/auth/**"
+            "/api/v1/auth/**"      // AuthEndpoints
     };
+
+    private static final String[] SWAGGER_URLS = {
+            "/v3/api-docs/**",      // OpenAPI Json Data (Backend Data)
+            "/swagger-ui/**",       // interface
+            "/swagger-ui.html"      // main page
+    };
+
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -35,6 +42,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req->req
                         .requestMatchers(WHITE_LIST_URL).permitAll()
+                        .requestMatchers(SWAGGER_URLS).permitAll()
+                        .requestMatchers("/api/v1/test/**").hasAnyRole("USER","ADMIN")
+                        //.requestMatchers(SWAGGER_URLS).hasRole("ADMIN")
                         .anyRequest().authenticated())
                         .exceptionHandling(exception->exception
                                 .authenticationEntryPoint(authenticationEntryPoint)

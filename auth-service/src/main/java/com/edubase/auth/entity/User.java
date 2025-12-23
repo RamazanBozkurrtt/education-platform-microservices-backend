@@ -46,7 +46,6 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     @ToString.Exclude
-    @Builder.Default
     private Set<Role> roles = new HashSet<Role>();
 
     @CreationTimestamp
@@ -56,6 +55,7 @@ public class User {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    @Builder.Default
     @Column(nullable = false)
     private boolean locked = false;
 
