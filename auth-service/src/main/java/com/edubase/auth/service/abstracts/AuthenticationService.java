@@ -12,4 +12,6 @@ public interface AuthenticationService {
 
     public AuthenticationResponse authenticate(AuthenticationRequest request);
 
+    public void logout(String token);
+
 }

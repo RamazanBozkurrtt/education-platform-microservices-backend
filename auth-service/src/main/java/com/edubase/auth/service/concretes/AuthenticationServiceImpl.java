@@ -13,6 +13,7 @@ import com.edubase.auth.repository.RefreshTokenRepository;
 import com.edubase.auth.repository.RoleRepository;
 import com.edubase.auth.repository.UserRepository;
 import com.edubase.auth.service.abstracts.AuthenticationService;
+import com.edubase.auth.service.abstracts.RedisTokenService;
 import com.edubase.common.exceptions.BusinessException;
 import com.edubase.common.handling.ErrorCode;
 import jakarta.transaction.Transactional;
@@ -20,10 +21,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -39,6 +42,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
+    private final RedisTokenService redisTokenService;
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -88,6 +92,24 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         var refreshToken = jwtService.generateRefreshToken(user);
         refreshTokenRepository.save(refreshToken);
         return new AuthenticationResponse(token,refreshToken.getRefreshToken());
+    }
+
+    @Override
+    @Transactional
+    public void logout(String token) {
+        if (token == null || !token.startsWith("Bearer ")) {
+            return;
+        }
+
+        String accessToken = token.substring(7);
+        String userEmail = jwtService.extractUsername(accessToken);
+        Date expirationDate = jwtService.extractExpiration(accessToken);
+
+        redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
+
+        refreshTokenRepository.deleteByUserEmail(userEmail);
+
+        SecurityContextHolder.clearContext();
     }
 
 }

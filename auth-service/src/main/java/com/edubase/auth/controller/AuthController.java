@@ -12,23 +12,20 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController extends RestBaseController {
 
-    private final AuthenticationService authenticationServiceImpl;
+    private final AuthenticationService authenticationService;
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/register")
     @Operation(summary = "User Register", description = "Creates a new user account.")
     public ResponseEntity<RestResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        return created(authenticationServiceImpl.register(registerRequest));
+        return created(authenticationService.register(registerRequest));
     }
 
     @Operation(summary = "Login", description = "Returns Access and Refresh tokens.")
@@ -38,13 +35,19 @@ public class AuthController extends RestBaseController {
     })
     @PostMapping("/login")
     public ResponseEntity<RestResponse<AuthenticationResponse>> authenticate(@Valid @RequestBody AuthenticationRequest authenticationRequest) {
-        return ok(authenticationServiceImpl.authenticate(authenticationRequest));
+        return ok(authenticationService.authenticate(authenticationRequest));
     }
 
     @PostMapping("/refresh-token")
     @Operation(summary = "Refresh Token", description = "Generates a new Access Token using a Refresh Token.")
     public ResponseEntity<RestResponse<AuthenticationResponse>> refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
         return ok(refreshTokenService.refreshToken(request));
+    }
+
+    @PostMapping
+    public ResponseEntity<RestResponse<String>> logout(@RequestHeader("Authorization") String authHeader) {
+        authenticationService.logout(authHeader);
+        return ok("success");
     }
 
 }
