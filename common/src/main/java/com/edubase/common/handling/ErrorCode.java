@@ -17,6 +17,8 @@ public enum ErrorCode {
     USER_NOT_FOUND(2001, "Kullanıcı bulunamadı", HttpStatus.NOT_FOUND),
     USER_ALREADY_EXISTS(2002, "Bu email zaten kullanımda", HttpStatus.BAD_REQUEST),
 
+    VALIDATION_ERROR(3001,"Hatalı Değerler Girildi",HttpStatus.BAD_REQUEST),
+
     // Genel
     INTERNAL_ERROR(5000, "Bilinmeyen bir hata oluştu", HttpStatus.INTERNAL_SERVER_ERROR),
 

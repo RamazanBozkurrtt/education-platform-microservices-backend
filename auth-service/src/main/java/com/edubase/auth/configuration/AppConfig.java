@@ -29,8 +29,13 @@ public class AppConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> userRepository.findByEmailWithRoles(username)
-                .map(UserPrincipal::new)
+        return username -> userRepository.findByEmail(username)
+                .map(user -> {
+                    var authorities = user.getRoles().stream()
+                            .map(role -> new org.springframework.security.core.authority.SimpleGrantedAuthority(role.getName()))
+                            .toList();
+                    return new UserPrincipal(user, authorities);
+                })
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 
