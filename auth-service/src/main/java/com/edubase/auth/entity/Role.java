@@ -1,6 +1,7 @@
 package com.edubase.auth.entity;
 
 
+import com.edubase.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -13,14 +14,12 @@ import java.util.Set;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Role {
-
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "role_seq")
-    @SequenceGenerator(name = "role_seq", sequenceName = "role_seq", allocationSize = 1)
-    @Column(name = "role_id")
-    private Long id;
+@Builder
+@AttributeOverride(
+        name = "id",
+        column = @Column(name = "role_id")
+)
+public class Role extends BaseEntity {
 
     @Column(nullable = false, unique = true)
     private String name;

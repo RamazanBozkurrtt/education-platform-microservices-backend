@@ -64,7 +64,17 @@ services:
     networks:
       - edubase-network
 
-        
+  # ----------------------------
+  # CONSUL (Service Discovery & Config)
+  # ----------------------------
+  consul:
+    image: hashicorp/consul:1.15
+    container_name: edubase-consul
+    ports:
+      - "8500:8500" # UI ve API portu
+    command: "agent -dev -client=0.0.0.0"
+    networks:
+      - edubase-network
 
 networks:
   edubase-network:

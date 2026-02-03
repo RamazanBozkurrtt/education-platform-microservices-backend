@@ -3,6 +3,7 @@ package com.edubase.auth.service.concretes;
 import com.edubase.auth.dto.AuthenticationResponse;
 import com.edubase.auth.dto.RefreshTokenRequest;
 import com.edubase.auth.entity.RefreshToken;
+import com.edubase.auth.entity.User;
 import com.edubase.auth.jwt.JwtService;
 import com.edubase.auth.repository.RefreshTokenRepository;
 import com.edubase.auth.service.abstracts.RefreshTokenService;
@@ -34,22 +35,23 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Transactional
     public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
         RefreshToken refreshToken = refreshTokenRepository.findByRefreshToken(request.getRefreshToken())
-                .orElseThrow(() -> new SignatureException(ErrorCode.AUTH_INVALID_SIGNATURE.getMessage()));
-        if(isRefreshTokenExpired(refreshToken.getExpiryDate())){
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE));
+        if (refreshToken.isRevoked() || isRefreshTokenExpired(refreshToken.getExpiryDate())) {
             refreshTokenRepository.delete(refreshToken);
             throw new BusinessException(ErrorCode.AUTH_TOKEN_EXPIRED);
         }
-        if (refreshToken.isRevoked()) {
-            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
-        }
-        String token = jwtService.generateToken(refreshToken.getUser());
-        RefreshToken refreshTokenDB = saveRefreshToken(jwtService.generateRefreshToken(refreshToken.getUser()));
+
+        User user = refreshToken.getUser();
+        String token = jwtService.generateToken(user);
+        RefreshToken newRefreshToken = jwtService.generateRefreshToken(user);
+
         refreshTokenRepository.delete(refreshToken);
-        return new AuthenticationResponse(token,refreshTokenDB.getRefreshToken());
+        refreshTokenRepository.save(newRefreshToken);
+
+        return new AuthenticationResponse(token, newRefreshToken.getRefreshToken());
     }
 
     private boolean isRefreshTokenExpired(Instant expiryDate) {
         return Instant.now().isAfter(expiryDate);
     }
-
 }

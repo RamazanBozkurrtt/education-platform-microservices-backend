@@ -2,49 +2,52 @@ package com.edubase.common.utils;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
 import org.springframework.http.HttpStatus;
-
 import java.time.LocalDateTime;
 
 @Getter
-@Setter
+@Builder
 public class RestResponse<T> {
 
-    private int statusCode;
-    private String status;
-    private String message;
-    private T data;
-    private LocalDateTime timestamp;
-    private boolean success;
+    private final int statusCode;
+    private final String status;
+    private final String message;
+    private final T data;
+    private final LocalDateTime timestamp;
+    private final boolean success;
 
-    private RestResponse(HttpStatus status, String message,T data,boolean success) {
-        this.statusCode = status.value();
-        this.status = status.name();
+    private RestResponse(int statusCode, String status, String message, T data, boolean success) {
+        this.statusCode = statusCode;
+        this.status = status;
         this.message = message;
         this.data = data;
         this.success = success;
         this.timestamp = LocalDateTime.now();
     }
 
+    // --- Static Factory Methods ---
+
     public static <T> RestResponse<T> ok(T data) {
-        return new RestResponse<>(HttpStatus.OK, "Success", data, true);
+        return new RestResponse<>(HttpStatus.OK.value(), HttpStatus.OK.name(), "Success", data, true);
+    }
+
+    public static <T> RestResponse<PageResponse<T>> ok(PageResponse<T> pageData) {
+        return new RestResponse<>(HttpStatus.OK.value(), HttpStatus.OK.name(), "Pagination Success", pageData, true);
     }
 
     public static <T> RestResponse<T> created(T data) {
-        return new RestResponse<>(HttpStatus.CREATED, "Created successfully", data, true);
+        return new RestResponse<>(HttpStatus.CREATED.value(), HttpStatus.CREATED.name(), "Created successfully", data, true);
     }
 
     public static <T> RestResponse<T> empty() {
-        return new RestResponse<>(HttpStatus.NO_CONTENT, "No Content", null, true);
+        return new RestResponse<>(HttpStatus.NO_CONTENT.value(), HttpStatus.NO_CONTENT.name(), "No Content", null, true);
     }
 
     public static <T> RestResponse<T> error(T data, HttpStatus status, String message) {
-        return new RestResponse<>(status, message, data, false);
+        return new RestResponse<>(status.value(), status.name(), message, data, false);
     }
 
     public static <T> RestResponse<T> error(HttpStatus status, String message) {
-        return new RestResponse<>(status, message, null, false);
+        return new RestResponse<>(status.value(), status.name(), message, null, false);
     }
-
 }

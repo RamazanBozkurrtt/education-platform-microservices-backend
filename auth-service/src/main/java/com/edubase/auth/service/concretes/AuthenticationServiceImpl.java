@@ -84,7 +84,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                         request.password()
                 )
         );
-        var user = userRepository.findByEmailWithRoles(request.email())
+        var user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new UsernameNotFoundException(request.email()));
 
         var token = jwtService.generateToken(user);
@@ -100,16 +100,32 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (token == null || !token.startsWith("Bearer ")) {
             return;
         }
+        try{
+            String accessToken = token.substring(7);
+            String userEmail = jwtService.extractUsername(accessToken);
+            Date expirationDate = jwtService.extractExpiration(accessToken);
 
-        String accessToken = token.substring(7);
-        String userEmail = jwtService.extractUsername(accessToken);
-        Date expirationDate = jwtService.extractExpiration(accessToken);
+            redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
 
-        redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
+            refreshTokenRepository.deleteByUserEmail(userEmail);
 
-        refreshTokenRepository.deleteByUserEmail(userEmail);
-
-        SecurityContextHolder.clearContext();
+            SecurityContextHolder.clearContext();
+        }catch (Exception e){
+            log.error("Logout sırasında hata: {}", e.getMessage());
+        }finally {
+            SecurityContextHolder.clearContext();
+        }
     }
+
+    /*
+    public Page<User> searchUsers(String name, Boolean active, Pageable pageable) {
+    Specification<User> spec = Specification.where(UserSpecification.hasFirstName(name))
+                                           .and(UserSpecification.isActive(active))
+                                           .and(UserSpecification.isNotDeleted());
+
+    // Hem dinamik filtreleme yapar hem de sayfalama desteği sunar
+    return userRepository.findAll(spec, pageable);
+    }
+     */
 
 }

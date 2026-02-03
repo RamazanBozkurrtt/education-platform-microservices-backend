@@ -1,12 +1,10 @@
 package com.edubase.auth.entity;
 
-import io.hypersistence.utils.hibernate.id.Tsid;
+import com.edubase.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.SQLDelete;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -17,12 +15,12 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
-
-    @Id
-    @Tsid
-    @Column(name = "user_id", nullable = false,updatable = false)
-    private Long id;
+@SQLDelete(sql = "UPDATE users SET is_deleted = true, deleted_at = NOW() WHERE user_id = ? AND version = ?")
+@AttributeOverride(
+        name = "id",
+        column = @Column(name = "user_id")
+)
+public class User extends BaseEntity {
 
     @Column(nullable = false,unique = true)
     private String email;
@@ -47,13 +45,6 @@ public class User {
     )
     @ToString.Exclude
     private Set<Role> roles = new HashSet<Role>();
-
-    @CreationTimestamp
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
 
     @Builder.Default
     @Column(nullable = false)
