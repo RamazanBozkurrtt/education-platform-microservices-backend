@@ -1,4 +1,4 @@
-package com.edubase.common.controller;
+package com.edubase.user.controller.base;
 
 import com.edubase.common.utils.PageResponse;
 import com.edubase.common.utils.RestResponse;
