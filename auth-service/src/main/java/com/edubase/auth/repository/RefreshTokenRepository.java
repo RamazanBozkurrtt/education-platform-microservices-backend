@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface RefreshTokenRepository extends JpaRepository<RefreshToken,Integer> {
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken,Long> {
 
     @Modifying
     void deleteByUser(User user);

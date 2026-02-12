@@ -44,18 +44,14 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Common modül -->
-        <dependency>
-            <groupId>com.edubase</groupId>
-            <artifactId>common</artifactId>
-        </dependency>
-
         <!-- Lombok (opsiyonel) -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        
 
         <!-- Test -->
         <dependency>

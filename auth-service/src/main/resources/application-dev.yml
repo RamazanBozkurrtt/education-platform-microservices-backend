@@ -1,0 +1,15 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/edubase_auth_db
+    username: edubase
+    password: password
+    driver-class-name: org.postgresql.Driver
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  expiration: 3h
+  refreshTokenExpiration: 6h

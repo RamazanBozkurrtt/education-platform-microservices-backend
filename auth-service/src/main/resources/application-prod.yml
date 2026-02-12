@@ -1,0 +1,15 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: ${AUTH_DB_URL}
+    username: ${AUTH_DB_USERNAME}
+    password: ${AUTH_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+jwt:
+  secret: ${AUTH_JWT_SECRET}
+  expiration: ${AUTH_JWT_EXPIRATION:3h}
+  refreshTokenExpiration: ${AUTH_JWT_REFRESH_EXPIRATION:6h}

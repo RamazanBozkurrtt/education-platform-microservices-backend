@@ -4,6 +4,7 @@ package com.edubase.auth.controller;
 import com.edubase.auth.dto.*;
 import com.edubase.auth.service.abstracts.AuthenticationService;
 import com.edubase.auth.service.abstracts.RefreshTokenService;
+import com.edubase.auth.controller.base.RestBaseController;
 import com.edubase.common.utils.RestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-public class AuthController {
+public class AuthController extends RestBaseController {
 
     private final AuthenticationService authenticationService;
     private final RefreshTokenService refreshTokenService;

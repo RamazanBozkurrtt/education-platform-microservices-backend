@@ -1,6 +1,6 @@
 package com.edubase.auth.entity;
 
-import com.edubase.common.entity.BaseEntity;
+import com.edubase.commonJpa.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
