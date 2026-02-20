@@ -4,9 +4,9 @@ spring:
       on-profile: dev
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/edubase_auth_db
-    username: edubase
-    password: password
+    url: jdbc:postgresql://postgres:5432/auth_db
+    username: postgres
+    password: postgres
     driver-class-name: org.postgresql.Driver
 
 jwt:

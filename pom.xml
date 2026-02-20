@@ -39,7 +39,7 @@
         <lombok.version>1.18.30</lombok.version>
 
         <!-- JJWT versiyonu (Spring BOM her zaman yönetmeyebilir) -->
-        <jjwt.version>0.11.5</jjwt.version>
+        <jjwt.version>0.12.5</jjwt.version>
 
         <hypersistence.tsid.version>2.1.0</hypersistence.tsid.version>
 

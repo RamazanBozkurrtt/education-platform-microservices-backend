@@ -7,9 +7,8 @@ import com.edubase.auth.entity.User;
 import com.edubase.auth.jwt.JwtService;
 import com.edubase.auth.repository.RefreshTokenRepository;
 import com.edubase.auth.service.abstracts.RefreshTokenService;
-import com.edubase.common.exceptions.BusinessException;
-import com.edubase.common.handling.ErrorCode;
-import io.jsonwebtoken.security.SignatureException;
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 

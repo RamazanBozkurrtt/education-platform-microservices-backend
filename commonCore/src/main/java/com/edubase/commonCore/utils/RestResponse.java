@@ -47,6 +47,15 @@ public class RestResponse<T> {
                 .build();
     }
 
+    public static <T> RestResponse<T> empty() {
+        return RestResponse.<T>builder()
+                .success(true)
+                .status(204)
+                .message("No Content")
+                .timestamp(System.currentTimeMillis())
+                .build();
+    }
+
     public static <T> RestResponse<T> error(int status, String message) {
         return RestResponse.<T>builder()
                 .success(false)

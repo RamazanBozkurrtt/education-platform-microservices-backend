@@ -1,8 +1,8 @@
 package com.edubase.auth.exceptions.handling;
 
-import com.edubase.common.exceptions.BusinessException;
-import com.edubase.common.handling.ErrorCode;
-import com.edubase.common.utils.RestResponse;
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
+import com.edubase.commonCore.utils.RestResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.security.SignatureException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestControllerAdvice

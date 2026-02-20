@@ -22,6 +22,12 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- @Slf4j için gerekli API -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
         <!-- TSID -->
         <dependency>
             <groupId>io.hypersistence</groupId>

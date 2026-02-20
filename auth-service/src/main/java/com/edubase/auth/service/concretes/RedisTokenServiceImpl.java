@@ -12,17 +12,19 @@ import java.time.Duration;
 public class RedisTokenServiceImpl implements RedisTokenService {
 
     private final RedisTemplate<String,String> redisTemplate;
+    private static final String BLACKLIST_PREFIX = "blacklist:";
 
     @Override
     public void blacklistToken(String token, long expiration) {
         long ttl = expiration-System.currentTimeMillis();
         if(ttl>0){
-            redisTemplate.opsForValue().set(token,"blacklisted", Duration.ofMillis(ttl));
+            String key = BLACKLIST_PREFIX+token;
+            redisTemplate.opsForValue().set(key,"blacklisted", Duration.ofMillis(ttl));
         }
     }
 
     @Override
     public boolean isTokenBlacklisted(String token) {
-        return redisTemplate.hasKey(token);
+        return redisTemplate.hasKey(BLACKLIST_PREFIX+token);
     }
 }

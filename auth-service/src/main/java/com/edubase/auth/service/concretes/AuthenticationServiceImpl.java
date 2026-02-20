@@ -14,8 +14,8 @@ import com.edubase.auth.repository.RoleRepository;
 import com.edubase.auth.repository.UserRepository;
 import com.edubase.auth.service.abstracts.AuthenticationService;
 import com.edubase.auth.service.abstracts.RedisTokenService;
-import com.edubase.common.exceptions.BusinessException;
-import com.edubase.common.handling.ErrorCode;
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,8 +54,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(()-> new BusinessException(ErrorCode.ROLE_NOT_FOUND));
 
         var user = User.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .isActive(true)
@@ -102,6 +100,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
         try{
             String accessToken = token.substring(7);
+
+            if (!jwtService.isTokenStructurallyValid(accessToken)) {
+                return;
+            }
+
             String userEmail = jwtService.extractUsername(accessToken);
             Date expirationDate = jwtService.extractExpiration(accessToken);
 

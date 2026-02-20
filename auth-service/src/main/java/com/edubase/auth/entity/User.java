@@ -28,12 +28,6 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String passwordHash;
 
-    @Column(nullable = false)
-    private String firstName;
-
-    @Column(nullable = false)
-    private String lastName;
-
     @Builder.Default
     private Boolean isActive = true;
 
@@ -43,6 +37,7 @@ public class User extends BaseEntity {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
+    @Builder.Default
     @ToString.Exclude
     private Set<Role> roles = new HashSet<Role>();
 

@@ -14,16 +14,6 @@ import lombok.NoArgsConstructor;
 @Data
 @Builder
 public class UserRequest {
-    @NotNull(message = "İsim adı boş olamaz")
-    @NotEmpty(message = "İsim adı boş olamaz")
-    @Size(min = 2, max = 20, message = "İsim adı 2-35 karakter olmalı")
-    private String firstName;
-
-
-    @NotNull(message = "Soyisim adı boş olamaz")
-    @NotEmpty(message = "Soyisim adı boş olamaz")
-    @Size(min = 2, max = 20, message = "Soyisim adı 2-20 karakter olmalı")
-    private String lastName;
 
     @NotNull(message = "Şifre boş olamaz")
     @NotEmpty(message = "Şifre boş olamaz")

@@ -16,10 +16,4 @@ public class RegisterRequest {
     @Size(min = 6, message = "Şifre en az 6 karakter olmalıdır")
     private String password;
 
-    @NotBlank(message = "Ad boş olamaz")
-    private String firstName;
-
-    @NotBlank(message = "Soyad boş olamaz")
-    private String lastName;
-
 }
