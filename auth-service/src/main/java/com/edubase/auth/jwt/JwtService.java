@@ -1,5 +1,6 @@
 package com.edubase.auth.jwt;
 
+import com.edubase.auth.configuration.JwtProperties;
 import com.edubase.auth.entity.RefreshToken;
 import com.edubase.auth.entity.Role;
 import com.edubase.auth.entity.User;
@@ -8,13 +9,12 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
@@ -22,23 +22,16 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
 
-    @Value("${jwt.secret}")
-    private String secretKey;
+    private final JwtProperties jwtProperties;
 
-    @Value("${jwt.expiration}")
-    private Duration jwtExpiration;
 
-    @Value("${jwt.refreshTokenExpiration}")
-    private Duration refreshExpiration;
-
-    //+
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
 
-    //+
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
@@ -60,7 +53,7 @@ public class JwtService {
             UserDetails userDetails
     ) {
 
-        return buildToken(extraClaims, userDetails, jwtExpiration.toMillis());
+        return buildToken(extraClaims, userDetails, jwtProperties.getExpiration().toMillis());
     }
 
     private String buildToken(
@@ -84,12 +77,12 @@ public class JwtService {
         var authorities = user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .toList();
-        String token = buildToken(new HashMap<>(), new UserPrincipal(user, authorities), refreshExpiration.toMillis());
+        String token = buildToken(new HashMap<>(), new UserPrincipal(user, authorities), jwtProperties.getRefreshTokenExpiration().toMillis());
         return RefreshToken.builder()
                 .refreshToken(token)
                 .revoked(false)
                 .user(user)
-                .expiryDate(Instant.now().plusMillis(refreshExpiration.toMillis()))
+                .expiryDate(Instant.now().plusMillis(jwtProperties.getRefreshTokenExpiration().toMillis()))
                 .build();
     }
 
@@ -97,6 +90,15 @@ public class JwtService {
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+    }
+
+    public boolean isTokenStructurallyValid(String token) {
+        try {
+            extractUsername(token);
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public boolean isTokenExpired(String token) {
@@ -118,7 +120,7 @@ public class JwtService {
     }
 
     private SecretKey getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

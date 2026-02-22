@@ -1,9 +1,10 @@
 package com.edubase.user.entity;
 
-import com.edubase.common.entity.BaseEntity;
+import com.edubase.commonJpa.entity.BaseEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Type;
 import org.hibernate.annotations.Type;
 
 import java.util.Map;
@@ -17,7 +18,7 @@ import java.util.Map;
 @Table(name = "profiles")
 @AttributeOverride(
         name = "id",
-        column = @Column(name = "profile_id", insertable = false, updatable = false)
+        column = @Column(name = "profile_id")
 )
 public class UserProfile extends BaseEntity {
 

@@ -1,7 +1,8 @@
 package com.edubase.auth.security;
 
-import com.edubase.common.handling.ErrorCode;
-import com.edubase.common.utils.RestResponse;
+
+import com.edubase.commonCore.exceptions.ErrorCode;
+import com.edubase.commonCore.utils.RestResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,7 +33,7 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
 
 
 
-        objectMapper.writeValue(response.getOutputStream(), RestResponse.error(ErrorCode.AUTH_UNAUTHORIZED.getHttpStatus(),ErrorCode.AUTH_UNAUTHORIZED.getMessage()));
+        objectMapper.writeValue(response.getOutputStream(), RestResponse.error(ErrorCode.AUTH_UNAUTHORIZED.getHttpStatus(), ErrorCode.AUTH_UNAUTHORIZED.getMessage()));
     }
 
 }

@@ -1,7 +1,7 @@
 package com.edubase.auth.entity;
 
 
-import com.edubase.common.entity.BaseEntity;
+import com.edubase.commonJpa.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,6 +25,7 @@ public class Role extends BaseEntity {
     private String name;
 
     @ManyToMany(mappedBy = "roles")
+    @Builder.Default
     @ToString.Exclude
     private Set<User> users = new HashSet<>();
 

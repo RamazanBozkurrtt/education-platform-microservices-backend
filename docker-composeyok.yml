@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # ----------------------------
+  # POSTGRESQL (Auth & Order DB)
+  # ----------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: edubase-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=edubase
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=edubase_auth_db # Varsayılan DB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # MONGODB (Course Service DB)
+  # ----------------------------
+  mongo:
+    image: mongo:6.0
+    container_name: edubase-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=edubase
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # REDIS (Caching)
+  # ----------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: edubase-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # RABBITMQ (Message Broker)
+  # ----------------------------
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: edubase-rabbitmq
+    ports:
+      - "5672:5672"   # Uygulama portu
+      - "15672:15672" # Yönetim paneli (UI)
+    environment:
+      - RABBITMQ_DEFAULT_USER=edubase
+      - RABBITMQ_DEFAULT_PASS=password
+    networks:
+      - edubase-network
+
+  # ----------------------------
+  # CONSUL (Service Discovery & Config)
+  # ----------------------------
+  consul:
+    image: hashicorp/consul:1.15
+    container_name: edubase-consul
+    ports:
+      - "8500:8500" # UI ve API portu
+    command: "agent -dev -client=0.0.0.0"
+    networks:
+      - edubase-network
+
+networks:
+  edubase-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:

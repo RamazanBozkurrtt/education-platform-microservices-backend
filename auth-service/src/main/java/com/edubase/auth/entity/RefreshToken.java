@@ -1,7 +1,6 @@
 package com.edubase.auth.entity;
 
 
-import com.edubase.common.entity.BaseEntity;
 import io.hypersistence.utils.hibernate.id.Tsid;
 import jakarta.persistence.*;
 import lombok.*;

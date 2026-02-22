@@ -1,11 +1,11 @@
 package com.edubase.auth.controller;
 
 
+import com.edubase.auth.controller.base.RestBaseController;
 import com.edubase.auth.dto.*;
 import com.edubase.auth.service.abstracts.AuthenticationService;
 import com.edubase.auth.service.abstracts.RefreshTokenService;
-import com.edubase.common.controller.RestBaseController;
-import com.edubase.common.utils.RestResponse;
+import com.edubase.commonCore.utils.RestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

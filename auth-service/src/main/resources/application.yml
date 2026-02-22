@@ -1,32 +1,12 @@
-server:
-  port: 8081
-
 spring:
-  application:
-    name: auth-service
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/edubase_auth_db
-    username: edubase
-    password: password
-    driver-class-name: org.postgresql.Driver
+  profiles:
+    active: dev
 
   jpa:
-    database: postgresql
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
     hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
+      ddl-auto: validate
 
 jwt:
-  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
   expiration: 3h
   refreshTokenExpiration: 6h
