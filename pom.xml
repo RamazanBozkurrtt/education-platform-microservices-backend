@@ -24,9 +24,6 @@
         <module>commonCore</module>
         <module>commonJpa</module>
         <module>auth-service</module>
-        <module>user-service</module>
-        <module>api-gateway</module>
-        <module>commonCore</module>
     </modules>
 
     <properties>
