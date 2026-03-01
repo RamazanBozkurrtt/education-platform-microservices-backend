@@ -33,4 +33,5 @@ public class UserProfile extends BaseEntity {
     @Type(JsonBinaryType.class)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> socialLinks; // LinkedIn, GitHub vb.
+
 }

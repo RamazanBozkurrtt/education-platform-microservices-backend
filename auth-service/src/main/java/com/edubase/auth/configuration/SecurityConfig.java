@@ -25,8 +25,11 @@ public class SecurityConfig {
     private final AuthenticationEntryPoint authenticationEntryPoint;
     private final AccessDeniedHandler accessDeniedHandler;
 
-    private static final String[] WHITE_LIST_URL = {
-            "/api/v1/auth/**",     // AuthEndpoints
+    private static final String[] PUBLIC_AUTH_URLS = {
+            "/api/v1/auth/register",
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh-token",
+            "/api/v1/auth/reactivate-account",
             "/error",
             "/favicon.ico"
     };
@@ -43,7 +46,7 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req->req
-                        .requestMatchers(WHITE_LIST_URL).permitAll()
+                        .requestMatchers(PUBLIC_AUTH_URLS).permitAll()
                         .requestMatchers(SWAGGER_URLS).permitAll()
                         .requestMatchers("/api/v1/test/**").hasAnyRole("USER","ADMIN")
                         //.requestMatchers(SWAGGER_URLS).hasRole("ADMIN")
