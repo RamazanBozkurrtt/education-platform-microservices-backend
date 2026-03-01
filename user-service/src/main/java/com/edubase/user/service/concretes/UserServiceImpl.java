@@ -9,6 +9,7 @@ import com.edubase.user.dto.response.UserProfileResponse;
 import com.edubase.user.entity.UserProfile;
 import com.edubase.user.repository.UserProfileRepository;
 import com.edubase.user.service.abstracts.UserService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -39,13 +40,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @PreAuthorize("hasAnyRole('ADMIN','USER')")
-    public UserProfile getById(Long id) {
-        return userProfileRepository.findById(id)
+    public UserProfileResponse getById(Long id) {
+        UserProfile dbUser = userProfileRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        return userMapper.toResponseFromEntity(dbUser);
     }
 
     @Override
-    public UserProfile update(Long id, UserProfile userProfile) {
+    @Transactional
+    public UserProfileResponse update(Long id, UserProfile userProfile) {
         UserProfile existing = userProfileRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
@@ -56,16 +60,12 @@ public class UserServiceImpl implements UserService {
         existing.setBiography(userProfile.getBiography());
         existing.setAvatarUrl(userProfile.getAvatarUrl());
         existing.setSocialLinks(userProfile.getSocialLinks());
-        existing.setStatus(userProfile.getStatus());
 
-        return userProfileRepository.save(existing);
+        userProfileRepository.save(existing);
+
+        return userMapper.toResponseFromEntity(existing);
     }
 
-    @Override
-    @PreAuthorize("hasRole('ADMIN')")
-    public void delete(Long id) {
-        UserProfile existing = userProfileRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        userProfileRepository.delete(existing);
-    }
+
+
 }

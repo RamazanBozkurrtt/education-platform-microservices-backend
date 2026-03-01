@@ -5,7 +5,6 @@ import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
-import org.hibernate.annotations.Type;
 
 import java.util.Map;
 
@@ -34,8 +33,4 @@ public class UserProfile extends BaseEntity {
     @Type(JsonBinaryType.class)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> socialLinks; // LinkedIn, GitHub vb.
-
-    @Enumerated(EnumType.STRING)
-    private UserStatus status; // ACTIVE, BANNED, PENDING
-
 }
