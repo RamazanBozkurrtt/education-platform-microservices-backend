@@ -1,6 +1,5 @@
 package com.edubase.user.dto.request;
 
-import com.edubase.user.entity.UserStatus;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -8,7 +7,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 
 import java.util.Map;
 
@@ -47,8 +45,6 @@ public class UserProfileRequest {
 
     private Map<String, String> socialLinks; // LinkedIn, GitHub vb.
 
-
-    private UserStatus status; // ACTIVE, BANNED, PENDING
 
 
 }

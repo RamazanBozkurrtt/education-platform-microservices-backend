@@ -1,27 +1,41 @@
 server:
-  port: 8081 # Auth 8080 ise User 8081 olmalı
+  port: 8081
 
 spring:
   application:
     name: user-service
+
   datasource:
     url: jdbc:postgresql://localhost:5432/edubase_user_db
     username: edubase
     password: password
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
-      ddl-auto: update # Production'da 'validate' veya 'none' olmalı, Liquibase öneririm
+      ddl-auto: update   # Dev için update, prod'da validate
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
-  cloud:
-    consul:
-      host: localhost
-      port: 8500
-      discovery:
-        health-check-path: /actuator/health
-        instance-id: ${spring.application.name}:${random.value}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          secret-key: ${JWT_SECRET}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: always

@@ -27,8 +27,7 @@ public class UserController extends RestBaseController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getById(@PathVariable Long id) {
-
+    public ResponseEntity<RestResponse<UserProfileResponse>> getById(@PathVariable Long id) {
         return ok(userService.getById(id));
     }
 
@@ -37,9 +36,4 @@ public class UserController extends RestBaseController {
         return ok(userService.update(id, userProfile));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        userService.delete(id);
-        return noContent();
-    }
 }

@@ -1,5 +1,7 @@
 services:
-  postgres:
+
+  # AUTH DB
+  auth-postgres:
     image: postgres:15
     container_name: auth-postgres
     restart: always
@@ -10,15 +12,30 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - auth_postgres_data:/var/lib/postgresql/data
 
+  # USER DB
+  user-postgres:
+    image: postgres:15
+    container_name: user-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: edubase_user_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - user_postgres_data:/var/lib/postgresql/data
+
+  # REDIS
   redis:
     image: redis:7
-    container_name: auth-redis
+    container_name: edubase-redis
     restart: always
     ports:
       - "6379:6379"
 
-
 volumes:
-  postgres_data:
+  auth_postgres_data:
+  user_postgres_data:
