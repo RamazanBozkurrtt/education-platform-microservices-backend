@@ -1,6 +1,7 @@
 package com.edubase.auth.dto;
 
 
+import com.edubase.auth.entity.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,7 +25,7 @@ public class UserResponse {
 
     private boolean locked;
 
-    private boolean isActive;
+    private UserStatus userStatus;
 
 
 }

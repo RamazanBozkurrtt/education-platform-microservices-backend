@@ -1,6 +1,5 @@
 package com.edubase.auth.security;
 
-
 import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.commonCore.utils.RestResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
-
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -25,13 +23,15 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     private final ObjectMapper objectMapper;
 
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
-        log.error("Yetkisiz erişim denemesi: {}", authException.getMessage());
+    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
+            throws IOException, ServletException {
+        log.warn("Yetkisiz erisim denemesi | method={} | path={} | msg={}",
+                request.getMethod(), request.getRequestURI(), authException.getMessage());
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-        objectMapper.writeValue(response.getOutputStream(), RestResponse.error(ErrorCode.AUTH_UNAUTHORIZED.getHttpStatus(),ErrorCode.AUTH_UNAUTHORIZED.getMessage()));
+        objectMapper.writeValue(response.getOutputStream(),
+                RestResponse.error(ErrorCode.AUTH_UNAUTHORIZED.getHttpStatus(), ErrorCode.AUTH_UNAUTHORIZED.getMessage()));
     }
-
 }

@@ -26,7 +26,9 @@ public class SecurityConfig {
     private final AccessDeniedHandler accessDeniedHandler;
 
     private static final String[] WHITE_LIST_URL = {
-            "/api/v1/auth/**"      // AuthEndpoints
+            "/api/v1/auth/**",     // AuthEndpoints
+            "/error",
+            "/favicon.ico"
     };
 
     private static final String[] SWAGGER_URLS = {

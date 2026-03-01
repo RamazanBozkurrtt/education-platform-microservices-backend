@@ -1,9 +1,10 @@
 CREATE TABLE IF NOT EXISTS roles (
-                                    id BIGSERIAL PRIMARY KEY,
-                                    name VARCHAR(64) NOT NULL,
-    description VARCHAR(255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
+    role_id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    created_by BIGINT,
+    updated_by BIGINT
+);
 
--- Seed için kritik
-CREATE UNIQUE INDEX IF NOT EXISTS ux_role_name ON role(name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_roles_name ON roles(name);

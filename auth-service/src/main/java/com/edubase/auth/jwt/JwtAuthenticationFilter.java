@@ -1,8 +1,9 @@
 package com.edubase.auth.jwt;
 
 import com.edubase.auth.service.abstracts.RedisTokenService;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.security.SignatureException;
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,7 +32,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final HandlerExceptionResolver handlerExceptionResolver;
 
     public JwtAuthenticationFilter(JwtService jwtService,
-                                   UserDetailsService userDetailsService, RedisTokenService tokenBlacklistService,
+                                   UserDetailsService userDetailsService,
+                                   RedisTokenService tokenBlacklistService,
                                    @Qualifier("handlerExceptionResolver") HandlerExceptionResolver handlerExceptionResolver) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
@@ -44,7 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
-    )throws ServletException, IOException {
+    ) throws ServletException, IOException {
 
         final String authHeader = request.getHeader("Authorization");
         final String jwtToken;
@@ -56,8 +58,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         jwtToken = authHeader.substring(7);
 
-        if(tokenBlacklistService.isTokenBlacklisted(jwtToken)){
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        if (tokenBlacklistService.isTokenBlacklisted(jwtToken)) {
+            handlerExceptionResolver.resolveException(
+                    request,
+                    response,
+                    null,
+                    new BusinessException(ErrorCode.AUTH_TOKEN_IS_BLACKLISTED)
+            );
             return;
         }
 
@@ -73,8 +80,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
             filterChain.doFilter(request, response);
-        } catch (ExpiredJwtException | SignatureException e) {
-            log.error("JWT Hatası: {}", e.getMessage());
+        } catch (JwtException e) {
+            log.warn("JWT parse/validation error: {}", e.getMessage());
             handlerExceptionResolver.resolveException(request, response, null, e);
         }
     }
