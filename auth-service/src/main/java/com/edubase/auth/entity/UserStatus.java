@@ -1,4 +1,4 @@
-package com.edubase.user.entity;
+package com.edubase.auth.entity;
 
 public enum UserStatus {
     ACTUAL,

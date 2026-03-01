@@ -8,9 +8,7 @@ public interface UserService {
 
     CustomPageResponse<UserProfileResponse> getAll(int pageNumber, int pageSize);
 
-    UserProfile getById(Long id);
+    UserProfileResponse getById(Long id);
 
-    UserProfile update(Long id, UserProfile userProfile);
-
-    void delete(Long id);
+    UserProfileResponse update(Long id, UserProfile userProfile);
 }
