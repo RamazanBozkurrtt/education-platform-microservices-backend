@@ -15,7 +15,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.security.SignatureException;
 import java.util.ArrayList;
@@ -35,7 +37,6 @@ public class GlobalExceptionHandler {
         }
     }
 
-    // BusinessException -> ErrorCode üzerinden yönet
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<RestResponse<Object>> handleBusinessException(BusinessException ex, HttpServletRequest request) {
         ErrorCode errorCode = ex.getErrorCode();
@@ -49,7 +50,6 @@ public class GlobalExceptionHandler {
                 .body(RestResponse.error(status.value(), ex.getMessage()));
     }
 
-    // Örnek: JWT signature
     @ExceptionHandler(SignatureException.class)
     public ResponseEntity<RestResponse<Object>> handleSignatureException(SignatureException ex, HttpServletRequest request) {
         ErrorCode errorCode = ErrorCode.AUTH_INVALID_SIGNATURE;
@@ -63,7 +63,6 @@ public class GlobalExceptionHandler {
                 .body(RestResponse.error(status.value(), ex.getMessage()));
     }
 
-    // Validation errors
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<RestResponse<Map<String, List<String>>>> handleValidationException(MethodArgumentNotValidException ex, HttpServletRequest request) {
         ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
@@ -79,10 +78,9 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(status)
-                .body(RestResponse.error(errors, status.value(), "Validasyon hatası"));
+                .body(RestResponse.error(errors, status.value(), "Validation error"));
     }
 
-    // Auth errors
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
     public ResponseEntity<RestResponse<Object>> handleAuthException(Exception ex, HttpServletRequest request) {
         ErrorCode errorCode = ErrorCode.AUTH_LOGIN_FAILED;
@@ -93,7 +91,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(status)
-                .body(RestResponse.error(status.value(), "Kullanıcı adı veya şifre hatalı"));
+                .body(RestResponse.error(status.value(), "Kullanici adi veya sifre hatali"));
     }
 
     @ExceptionHandler({LockedException.class, DisabledException.class})
@@ -119,7 +117,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(status)
-                .body(RestResponse.error(status.value(), "Bu işlem için yetkiniz yok"));
+                .body(RestResponse.error(status.value(), "Bu islem icin yetkiniz yok"));
     }
 
     @ExceptionHandler(Exception.class)
@@ -132,6 +130,11 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(status)
-                .body(RestResponse.error(status.value(), "Sunucu taraflı beklenmeyen bir hata oluştu."));
+                .body(RestResponse.error(status.value(), "Sunucu tarafli beklenmeyen bir hata olustu."));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public void handleNoResource() {
     }
 }

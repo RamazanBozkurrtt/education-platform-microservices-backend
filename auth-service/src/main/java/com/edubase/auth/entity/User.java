@@ -3,7 +3,6 @@ package com.edubase.auth.entity;
 import com.edubase.commonJpa.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -15,7 +14,6 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SQLDelete(sql = "UPDATE users SET is_deleted = true, deleted_at = NOW() WHERE user_id = ? AND version = ?")
 @AttributeOverride(
         name = "id",
         column = @Column(name = "user_id")
@@ -28,8 +26,10 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String passwordHash;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     @Builder.Default
-    private Boolean isActive = true;
+    private UserStatus userStatus = UserStatus.ACTUAL;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

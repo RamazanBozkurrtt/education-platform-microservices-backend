@@ -1,12 +1,11 @@
 package com.edubase.auth.security;
 
 import com.edubase.auth.entity.User;
+import com.edubase.auth.entity.UserStatus;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.stream.Collectors;
 
 public record UserPrincipal(
         User user,
@@ -46,7 +45,7 @@ public record UserPrincipal(
 
     @Override
     public boolean isEnabled() {
-        return user.getIsActive();
+        return user.getUserStatus() == UserStatus.ACTUAL;
     }
 
 }

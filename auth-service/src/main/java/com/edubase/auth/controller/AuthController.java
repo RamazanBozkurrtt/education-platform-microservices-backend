@@ -3,8 +3,11 @@ package com.edubase.auth.controller;
 
 import com.edubase.auth.controller.base.RestBaseController;
 import com.edubase.auth.dto.*;
+import com.edubase.auth.security.UserPrincipal;
 import com.edubase.auth.service.abstracts.AuthenticationService;
 import com.edubase.auth.service.abstracts.RefreshTokenService;
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.commonCore.utils.RestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -12,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -44,11 +48,31 @@ public class AuthController extends RestBaseController {
         return ok(refreshTokenService.refreshToken(request));
     }
 
+    @GetMapping("/reactivate-account")
+    @Operation(summary = "Reactivate account", description = "Reactivates account using one-time token.")
+    public ResponseEntity<RestResponse<String>> reactivateAccount(@RequestParam("token") String token) {
+        return ok(authenticationService.reactivateAccount(token));
+    }
+
     @PostMapping("/logout")
     @Operation(summary = "Log out",description = "Log out and blacklist AccesToken and RefreshToken.")
     public ResponseEntity<RestResponse<String>> logout(@RequestHeader("Authorization") String authHeader) {
         authenticationService.logout(authHeader);
         return ok("success");
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<?> deactivateUser(@AuthenticationPrincipal UserPrincipal principal) {
+
+        if (principal == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String email = principal.getUsername();
+
+        authenticationService.deactivate(email);
+
+        return noContent();
     }
 
 }

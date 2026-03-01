@@ -12,6 +12,10 @@ public interface AuthenticationService {
 
     public AuthenticationResponse authenticate(AuthenticationRequest request);
 
+    public String reactivateAccount(String token);
+
     public void logout(String token);
+
+    public void deactivate(String email);
 
 }
