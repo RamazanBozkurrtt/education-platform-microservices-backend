@@ -1,5 +1,7 @@
 package com.edubase.user.controller;
 
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.commonCore.utils.RestResponse;
 import com.edubase.user.controller.base.RestBaseController;
 import com.edubase.user.dto.request.UserProfileRequest;
@@ -17,6 +19,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -55,6 +59,17 @@ public class UserController extends RestBaseController {
         return ok(userService.getById(id));
     }
 
+    @GetMapping("/me")
+    @Operation(summary = "Get my profile", description = "Returns current authenticated user's profile.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Profile fetched successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "404", description = "User not found", content = @Content)
+    })
+    public ResponseEntity<RestResponse<UserProfileResponse>> getMe(@AuthenticationPrincipal Jwt jwt) {
+        return ok(userService.getMe(extractAuthUserId(jwt), extractAuthEmail(jwt)));
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "Update user profile", description = "Updates user profile by profile id.")
     @ApiResponses(value = {
@@ -63,20 +78,58 @@ public class UserController extends RestBaseController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
             @ApiResponse(responseCode = "404", description = "User not found", content = @Content)
     })
-    public ResponseEntity<RestResponse<UserProfileResponse>> update(@PathVariable Long id, @RequestBody UserProfileRequest userProfileRequest) {
+    public ResponseEntity<RestResponse<UserProfileResponse>> update(@PathVariable Long id, @RequestBody @Valid UserProfileRequest userProfileRequest) {
         return ok(userService.update(id, userProfileRequest));
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "Update my profile", description = "Updates current authenticated user's profile.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Profile updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "404", description = "User not found", content = @Content)
+    })
+    public ResponseEntity<RestResponse<UserProfileResponse>> updateMe(@AuthenticationPrincipal Jwt jwt, @RequestBody @Valid UserProfileRequest userProfileRequest) {
+        return ok(userService.updateMe(extractAuthUserId(jwt), extractAuthEmail(jwt), userProfileRequest));
     }
 
     @PostMapping
     @Operation(summary = "Create user profile", description = "Creates a new user profile.")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "User created successfully",
+            @ApiResponse(responseCode = "201", description = "User created successfully",
                     content = @Content(schema = @Schema(implementation = UserProfileResponse.class))),
             @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content)
     })
     public ResponseEntity<RestResponse<UserProfileResponse>> create(@RequestBody @Valid UserProfileRequest request){
-        return ok(userService.create(request));
+        return created(userService.create(request));
+    }
+
+    private String extractAuthEmail(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null || jwt.getSubject().isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        return jwt.getSubject().trim().toLowerCase();
+    }
+
+    private Long extractAuthUserId(Jwt jwt) {
+        if (jwt == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        Object claim = jwt.getClaim("userId");
+        if (claim instanceof Number number) {
+            return number.longValue();
+        }
+        if (claim instanceof String value && !value.isBlank()) {
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException ignore) {
+                return null;
+            }
+        }
+        return null;
     }
 
 }

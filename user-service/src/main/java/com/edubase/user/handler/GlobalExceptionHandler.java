@@ -118,11 +118,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<RestResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, HttpServletRequest request) {
-        ErrorCode errorCode = ErrorCode.AUTH_UNAUTHORIZED;
-        HttpStatus status = statusOf(errorCode);
+        HttpStatus status = HttpStatus.FORBIDDEN;
 
-        log.warn("ACCESS_DENIED | status={} code={} {} msg={}",
-                status, errorCode.getCode(), requestMeta(request), ex.getMessage());
+        log.warn("ACCESS_DENIED | status={} {} msg={}",
+                status, requestMeta(request), ex.getMessage());
 
         return ResponseEntity
                 .status(status)

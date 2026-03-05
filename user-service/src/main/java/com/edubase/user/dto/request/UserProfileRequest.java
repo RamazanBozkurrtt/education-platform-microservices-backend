@@ -1,7 +1,6 @@
 package com.edubase.user.dto.request;
 
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,41 +9,29 @@ import lombok.NoArgsConstructor;
 
 import java.util.Map;
 
-
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 public class UserProfileRequest {
 
-
-    @NotNull(message = "Email bilgisi boş olamaz")
-    @NotEmpty(message = "Email bilgisi boş olamaz")
-    @Size(min = 2, max = 30, message = "Email alanı 2-30 karakter olmalı")
+    @Email(message = "Email format is invalid")
+    @Size(max = 254, message = "Email must be at most 254 characters")
     private String email;
 
-    @NotNull(message = "İsim bilgisi boş olamaz")
-    @NotEmpty(message = "İsim bilgisi boş olamaz")
-    @Size(min = 2, max = 35, message = "İsim alanı 2-35 karakter olmalı")
+    @Size(min = 2, max = 35, message = "First name must be 2-35 characters")
     private String firstName;
 
-    @NotNull(message = "Soyisim bilgisi boş olamaz")
-    @NotEmpty(message = "Soysimi bilgisi boş olamaz")
-    @Size(min = 2, max = 20, message = "Soyisim alanı 2-35 karakter olmalı")
+    @Size(min = 2, max = 20, message = "Last name must be 2-20 characters")
     private String lastName;
 
-    @Size(max = 50 , message = "Başlık alanı en fazla 50 karakter olmalı")
+    @Size(max = 50, message = "Headline must be at most 50 characters")
     private String headline;
 
-    @Size(max = 250, message = "Biyografi alanı en fazla 250 karakter olmalıdır.")
+    @Size(max = 250, message = "Biography must be at most 250 characters")
     private String biography;
-
 
     private String avatarUrl;
 
-
-    private Map<String, String> socialLinks; // LinkedIn, GitHub vb.
-
-
-
+    private Map<String, String> socialLinks; // LinkedIn, GitHub etc.
 }

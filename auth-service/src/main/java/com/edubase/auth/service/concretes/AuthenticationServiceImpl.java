@@ -151,30 +151,30 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
-    public void logout(String token) {
+    public void logout(String token, String authenticatedEmail) {
+
+        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
         if (token == null || !token.startsWith("Bearer ")) {
-            return;
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
         }
-        try{
-            String accessToken = token.substring(7);
 
-            if (!jwtService.isTokenStructurallyValid(accessToken)) {
-                return;
-            }
-
-            String userEmail = jwtService.extractUsername(accessToken);
-            Date expirationDate = jwtService.extractExpiration(accessToken);
-
-            redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
-
-            refreshTokenRepository.deleteByUserEmail(userEmail);
-
-            SecurityContextHolder.clearContext();
-        }catch (Exception e){
-            log.error("Logout sırasında hata: {}", e.getMessage());
-        }finally {
-            SecurityContextHolder.clearContext();
+        String accessToken = token.substring(7);
+        if (!jwtService.isTokenStructurallyValid(accessToken)) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
         }
+
+        String userEmail = jwtService.extractUsername(accessToken);
+        if (userEmail == null || !userEmail.equalsIgnoreCase(authenticatedEmail.trim())) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        Date expirationDate = jwtService.extractExpiration(accessToken);
+        redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
+        refreshTokenRepository.deleteByUserEmail(userEmail);
+        SecurityContextHolder.clearContext();
     }
 
     @Override
@@ -243,3 +243,4 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      */
 
 }
+

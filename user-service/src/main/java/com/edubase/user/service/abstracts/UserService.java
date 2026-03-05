@@ -12,5 +12,9 @@ public interface UserService {
 
     UserProfileResponse update(Long id, UserProfileRequest userProfileRequest);
 
+    UserProfileResponse getMe(Long authUserId, String authEmail);
+
+    UserProfileResponse updateMe(Long authUserId, String authEmail, UserProfileRequest userProfileRequest);
+
     UserProfileResponse create(UserProfileRequest request);
 }
