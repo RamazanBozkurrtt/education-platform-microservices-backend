@@ -12,6 +12,9 @@ import com.edubase.user.repository.UserProfileRepository;
 import com.edubase.user.service.abstracts.UserService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +33,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @PreAuthorize("hasRole('ADMIN')")
+    @Cacheable(cacheNames = "userProfilesPaged", key = "T(String).valueOf(#pageNumber).concat(':').concat(T(String).valueOf(#pageSize))")
     public CustomPageResponse<UserProfileResponse> getAll(int pageNumber, int pageSize) {
         Pageable pageable = PageRequest.of(pageNumber,pageSize, Sort.by("createdAt"));
         Page<UserProfile> userPage = userProfileRepository.findAll(pageable);
@@ -41,6 +45,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @PreAuthorize("hasAnyRole('ADMIN')")
+    @Cacheable(cacheNames = "userProfilesById", key = "#id")
     public UserProfileResponse getById(Long id) {
         UserProfile dbUser = userProfileRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -51,6 +56,11 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userProfilesById", key = "#id"),
+            @CacheEvict(cacheNames = "userProfilesPaged", allEntries = true),
+            @CacheEvict(cacheNames = "userProfilesByAuth", allEntries = true)
+    })
     public UserProfileResponse update(Long id, UserProfileRequest userProfileRequest) {
         UserProfile existing = userProfileRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -64,6 +74,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    @Cacheable(cacheNames = "userProfilesByAuth", key = "T(String).valueOf(#authUserId).concat(':').concat(#authEmail == null ? '' : #authEmail)")
     public UserProfileResponse getMe(Long authUserId, String authEmail) {
         UserProfile dbUser = resolveOwnProfile(authUserId, authEmail);
 
@@ -73,6 +84,11 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userProfilesByAuth", key = "T(String).valueOf(#authUserId).concat(':').concat(#authEmail == null ? '' : #authEmail)"),
+            @CacheEvict(cacheNames = "userProfilesById", allEntries = true),
+            @CacheEvict(cacheNames = "userProfilesPaged", allEntries = true)
+    })
     public UserProfileResponse updateMe(Long authUserId, String authEmail, UserProfileRequest userProfileRequest) {
         UserProfile existing = resolveOwnProfile(authUserId, authEmail);
 
@@ -94,6 +110,11 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userProfilesById", allEntries = true),
+            @CacheEvict(cacheNames = "userProfilesPaged", allEntries = true),
+            @CacheEvict(cacheNames = "userProfilesByAuth", allEntries = true)
+    })
     public UserProfileResponse create(UserProfileRequest request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
         if (normalizedEmail == null || normalizedEmail.isBlank()) {

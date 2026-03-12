@@ -2,6 +2,7 @@ package com.edubase.user.configuration;
 
 import com.edubase.user.security.JwtAccessDeniedHandler;
 import com.edubase.user.security.JwtAuthenticationEntryPoint;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -10,6 +11,7 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -29,10 +31,14 @@ import java.util.stream.Collectors;
 @Configuration
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@Slf4j
 public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
     private final JwtAccessDeniedHandler accessDeniedHandler;
+
+    @Value("${auth.debug:false}")
+    private boolean authDebug;
 
     private static final String[] PUBLIC_URLS = {
             "/error",
@@ -77,12 +83,18 @@ public class SecurityConfig {
             List<String> roles = jwt.getClaimAsStringList("roles");
             if (roles == null) return List.of();
 
-            return roles.stream()
+            List<GrantedAuthority> authorities = roles.stream()
                     .map(role -> role == null ? "" : role.trim().toUpperCase(Locale.ROOT))
                     .filter(role -> !role.isBlank())
                     .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
                     .map(SimpleGrantedAuthority::new)
                     .collect(Collectors.toList());
+
+            if (authDebug) {
+                log.info("JWT subject={} roles={} authorities={}", jwt.getSubject(), roles, authorities);
+            }
+
+            return authorities;
         });
 
         return converter;

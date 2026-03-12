@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Service
@@ -77,7 +78,9 @@ public class JwtService {
         var authorities = user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .toList();
-        String token = buildToken(new HashMap<>(), new UserPrincipal(user, authorities), jwtProperties.getRefreshTokenExpiration().toMillis());
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("jti", UUID.randomUUID().toString());
+        String token = buildToken(extraClaims, new UserPrincipal(user, authorities), jwtProperties.getRefreshTokenExpiration().toMillis());
         return RefreshToken.builder()
                 .refreshToken(token)
                 .revoked(false)

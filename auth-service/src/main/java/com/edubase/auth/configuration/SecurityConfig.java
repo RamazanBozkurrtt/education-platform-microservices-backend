@@ -35,9 +35,9 @@ public class SecurityConfig {
     };
 
     private static final String[] SWAGGER_URLS = {
-            "/v3/api-docs/**",      // OpenAPI Json Data (Backend Data)
-            "/swagger-ui/**",       // interface
-            "/swagger-ui.html"      // main page
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html"
     };
 
 

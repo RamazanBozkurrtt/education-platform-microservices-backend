@@ -8,6 +8,14 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+  cache:
+    type: redis
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   jpa:
     open-in-view: false
     hibernate:
@@ -21,6 +29,12 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
+
+app:
+  gateway-url: ${GATEWAY_URL:http://localhost:8090}
+
+auth:
+  debug: ${AUTH_DEBUG:false}
 
 management:
   endpoints:

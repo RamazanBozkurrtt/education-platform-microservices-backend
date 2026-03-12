@@ -36,6 +36,20 @@ services:
     ports:
       - "6379:6379"
 
+  # COURSE DB
+  course-mongo:
+    image: mongo:7
+    container_name: course-mongo
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: edubase_course_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - course_mongo_data:/data/db
+
+
 volumes:
   auth_postgres_data:
   user_postgres_data:
+  course_mongo_data:
