@@ -1,34 +1,40 @@
 server:
-  port: 8081
+  port: ${USER_SERVICE_PORT:8081}
 
 spring:
   application:
     name: user-service
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/edubase_user_db
-    username: edubase
-    password: password
-    driver-class-name: org.postgresql.Driver
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  cache:
+    type: redis
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   jpa:
+    open-in-view: false
     hibernate:
-      ddl-auto: update   # Dev için update, prod'da validate
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: validate
 
   flyway:
     enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
     locations: classpath:db/migration
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          secret-key: ${JWT_SECRET}
+jwt:
+  secret: ${JWT_SECRET}
+
+app:
+  gateway-url: ${GATEWAY_URL:http://localhost:8090}
+
+auth:
+  debug: ${AUTH_DEBUG:false}
 
 management:
   endpoints:
@@ -38,4 +44,4 @@ management:
 
   endpoint:
     health:
-      show-details: always
+      show-details: never

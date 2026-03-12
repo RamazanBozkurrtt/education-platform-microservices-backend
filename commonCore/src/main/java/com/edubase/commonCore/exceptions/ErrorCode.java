@@ -12,6 +12,7 @@ public enum ErrorCode {
     AUTH_LOCKED_OR_INACTIVE(1004, "Hesabınız kilitlenmiş veya pasif durumda!", 403),
     AUTH_UNAUTHORIZED(1005, "Yetkisiz erişim!", 401),
     AUTH_TOKEN_IS_BLACKLISTED(1006,"Token Blacklist'e Alınmış",403),
+    AUTH_REFRESH_TOKEN_CONFLICT(1007, "Refresh token zaten kullanilmis", 409),
 
     // User
     USER_NOT_FOUND(2001, "Kullanıcı bulunamadı", 404),
@@ -19,6 +20,10 @@ public enum ErrorCode {
     USER_ALREADY_DEACTIVATED(2003,"Kullanıcı zaten deaktif durumda",400),
 
     VALIDATION_ERROR(3001, "Hatalı değerler girildi", 400),
+    // Course
+    COURSE_NOT_FOUND(7001, "Course not found", 404),
+    COURSE_PUBLISH_INVALID(7002, "Course cannot be published", 400),
+    COURSE_LESSON_NOT_FOUND(7003, "Lesson not found", 404),
 
     // General
     INTERNAL_ERROR(5000, "Bilinmeyen bir hata oluştu", 500),
@@ -38,3 +43,4 @@ public enum ErrorCode {
         this.httpStatus = httpStatus;
     }
 }
+

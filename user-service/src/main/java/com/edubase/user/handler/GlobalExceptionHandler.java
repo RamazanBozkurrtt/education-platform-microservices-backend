@@ -11,10 +11,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.security.SignatureException;
 import java.util.ArrayList;
@@ -118,11 +121,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<RestResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, HttpServletRequest request) {
-        ErrorCode errorCode = ErrorCode.AUTH_UNAUTHORIZED;
-        HttpStatus status = statusOf(errorCode);
+        HttpStatus status = HttpStatus.FORBIDDEN;
 
-        log.warn("ACCESS_DENIED | status={} code={} {} msg={}",
-                status, errorCode.getCode(), requestMeta(request), ex.getMessage());
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String principal = authentication == null ? "anonymous" : authentication.getName();
+        String authorities = authentication == null ? "none" : authentication.getAuthorities().toString();
+
+        log.warn("ACCESS_DENIED | status={} {} principal={} authorities={} msg={}",
+                status, requestMeta(request), principal, authorities, ex.getMessage());
 
         return ResponseEntity
                 .status(status)
@@ -140,6 +146,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(status)
                 .body(RestResponse.error(status.value(), "Sunucu tarafli beklenmeyen bir hata olustu."));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<RestResponse<Object>> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.NOT_FOUND;
+
+        log.warn("NO_RESOURCE | status={} {} msg={}",
+                status, requestMeta(request), ex.getMessage());
+
+        return ResponseEntity
+                .status(status)
+                .body(RestResponse.error(status.value(), "Kaynak bulunamadi"));
     }
 
 }

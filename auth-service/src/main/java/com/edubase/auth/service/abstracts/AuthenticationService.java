@@ -14,7 +14,7 @@ public interface AuthenticationService {
 
     public String reactivateAccount(String token);
 
-    public void logout(String token);
+    public void logout(String token, String authenticatedEmail);
 
     public void deactivate(String email);
 

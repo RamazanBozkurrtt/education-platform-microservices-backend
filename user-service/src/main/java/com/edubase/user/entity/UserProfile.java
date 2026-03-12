@@ -24,6 +24,9 @@ public class UserProfile extends BaseEntity {
     @Column(nullable = false,unique = true)
     private String email;
 
+    @Column(unique = true)
+    private Long authUserId;
+
     private String firstName;
     private String lastName;
     private String headline;
@@ -33,4 +36,5 @@ public class UserProfile extends BaseEntity {
     @Type(JsonBinaryType.class)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> socialLinks; // LinkedIn, GitHub vb.
+
 }

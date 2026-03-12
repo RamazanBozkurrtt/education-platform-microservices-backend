@@ -13,7 +13,6 @@ public class UserSpecification {
         return (root, query, cb) -> isActive == null ? null : cb.equal(root.get("isActive"), isActive);
     }
 
-    // Mükemmeliyetçi dokunuş: Silinmiş verileri filtreleme (Zaten SQLRestriction var ama ek güvence)
     public static Specification<User> isNotDeleted() {
         return (root, query, cb) -> cb.equal(root.get("deleted"), false);
     }

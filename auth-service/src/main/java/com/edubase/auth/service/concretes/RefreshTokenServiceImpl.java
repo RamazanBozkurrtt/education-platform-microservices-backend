@@ -10,6 +10,7 @@ import com.edubase.auth.service.abstracts.RefreshTokenService;
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
 import jakarta.transaction.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -45,7 +46,11 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         RefreshToken newRefreshToken = jwtService.generateRefreshToken(user);
 
         refreshTokenRepository.delete(refreshToken);
-        refreshTokenRepository.save(newRefreshToken);
+        try {
+            refreshTokenRepository.save(newRefreshToken);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_CONFLICT);
+        }
 
         return new AuthenticationResponse(token, newRefreshToken.getRefreshToken());
     }

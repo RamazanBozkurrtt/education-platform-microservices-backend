@@ -56,8 +56,12 @@ public class AuthController extends RestBaseController {
 
     @PostMapping("/logout")
     @Operation(summary = "Log out",description = "Log out and blacklist AccesToken and RefreshToken.")
-    public ResponseEntity<RestResponse<String>> logout(@RequestHeader("Authorization") String authHeader) {
-        authenticationService.logout(authHeader);
+    public ResponseEntity<RestResponse<String>> logout(@RequestHeader("Authorization") String authHeader,
+                                                       @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        authenticationService.logout(authHeader, principal.getUsername());
         return ok("success");
     }
 
