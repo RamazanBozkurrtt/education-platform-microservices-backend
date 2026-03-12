@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping({"/api/v1/courses", "/courses"})
+@RequestMapping("/courses")
 public class CourseController extends RestBaseController {
 
     private final CourseService courseService;
@@ -34,16 +34,42 @@ public class CourseController extends RestBaseController {
         return created(courseService.createCourse(authContext, request));
     }
 
+    @GetMapping("/public/{id}")
+    public ResponseEntity<RestResponse<CourseResponse>> getPublicCourseById(@PathVariable String id) {
+        return ok(courseService.getPublicCourseById(id));
+    }
+
+    @GetMapping("/public")
+    public ResponseEntity<RestResponse<CustomPageResponse<CourseResponse>>> getPublicCourses(
+            @RequestParam(defaultValue = "0") int pageNumber,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return ok(courseService.getPublicCourses(pageNumber, pageSize));
+    }
+
     @GetMapping("/{id}")
-    public ResponseEntity<RestResponse<CourseResponse>> getCourseById(@PathVariable String id) {
-        return ok(courseService.getCourseById(id));
+    public ResponseEntity<RestResponse<CourseResponse>> getCourseById(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String id) {
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ok(courseService.getCourseById(authContext, id));
     }
 
     @GetMapping
     public ResponseEntity<RestResponse<CustomPageResponse<CourseResponse>>> getCourses(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize) {
-        return ok(courseService.getCourses(pageNumber, pageSize));
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ok(courseService.getCourses(authContext, pageNumber, pageSize));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<RestResponse<CustomPageResponse<CourseResponse>>> getMyCourses(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "0") int pageNumber,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ok(courseService.getMyCourses(authContext, pageNumber, pageSize));
     }
 
     @PutMapping("/{id}")

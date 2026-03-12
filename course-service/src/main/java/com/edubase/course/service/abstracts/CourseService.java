@@ -12,9 +12,15 @@ public interface CourseService {
 
     CourseResponse createCourse(AuthContext authContext, CourseCreateRequest request);
 
-    CourseResponse getCourseById(String id);
+    CourseResponse getCourseById(AuthContext authContext, String id);
 
-    CustomPageResponse<CourseResponse> getCourses(int pageNumber, int pageSize);
+    CourseResponse getPublicCourseById(String id);
+
+    CustomPageResponse<CourseResponse> getCourses(AuthContext authContext, int pageNumber, int pageSize);
+
+    CustomPageResponse<CourseResponse> getPublicCourses(int pageNumber, int pageSize);
+
+    CustomPageResponse<CourseResponse> getMyCourses(AuthContext authContext, int pageNumber, int pageSize);
 
     CourseResponse updateCourse(AuthContext authContext, String id, CourseUpdateRequest request);
 

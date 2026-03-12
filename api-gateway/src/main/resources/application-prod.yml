@@ -3,6 +3,8 @@ service:
     url: ${AUTH_SERVICE_URL:http://auth-service:8080}
   user:
     url: ${USER_SERVICE_URL:http://user-service:8081}
+  course:
+    url: ${COURSE_SERVICE_URL:http://course-service:8083}
 
 spring:
   data:

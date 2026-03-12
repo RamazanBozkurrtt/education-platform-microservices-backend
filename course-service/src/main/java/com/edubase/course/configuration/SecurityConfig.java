@@ -49,13 +49,20 @@ public class SecurityConfig {
             "/actuator/info"
     };
 
+    private static final String[] SWAGGER_URLS = {
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/courses/**", "/courses/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/courses/public/**").permitAll()
+                        .requestMatchers(SWAGGER_URLS).permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
