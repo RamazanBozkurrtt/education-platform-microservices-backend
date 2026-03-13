@@ -38,7 +38,6 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
-
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getId());
@@ -53,7 +52,6 @@ public class JwtService {
             Map<String, Object> extraClaims,
             UserDetails userDetails
     ) {
-
         return buildToken(extraClaims, userDetails, jwtProperties.getExpiration().toMillis());
     }
 
@@ -66,6 +64,7 @@ public class JwtService {
         return Jwts
                 .builder()
                 .claims(extraClaims)
+                .id(UUID.randomUUID().toString())
                 .subject(userDetails.getUsername())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expiration)))

@@ -11,7 +11,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 
 @Component
@@ -32,11 +31,10 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
             return;
         }
 
-        Instant now = Instant.now();
         Lesson lesson = Lesson.builder()
                 .id(SAMPLE_LESSON_ID)
                 .title("Ornek Ders 1")
-                .videoUrl("/courses/" + SAMPLE_COURSE_ID + "/lessons/" + SAMPLE_LESSON_ID + "/video")
+                .videoUrl("/courses/" + SAMPLE_COURSE_ID + "/lessons/" + SAMPLE_LESSON_ID + "/video.mp4")
                 .duration(120)
                 .orderIndex(1)
                 .build();
@@ -48,8 +46,6 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
                 .price(BigDecimal.ZERO)
                 .status(CourseStatus.PUBLISHED)
                 .instructorId("sample")
-                .createdAt(now)
-                .updatedAt(now)
                 .lessons(List.of(lesson))
                 .build();
 

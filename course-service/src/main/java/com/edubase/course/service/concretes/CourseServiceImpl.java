@@ -30,7 +30,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,9 +56,6 @@ public class CourseServiceImpl implements CourseService {
         course.setInstructorId(authContext.userId());
         course.setStatus(CourseStatus.DRAFT);
         course.setLessons(new ArrayList<>());
-        Instant now = Instant.now();
-        course.setCreatedAt(now);
-        course.setUpdatedAt(now);
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
@@ -128,7 +124,6 @@ public class CourseServiceImpl implements CourseService {
         requireAdminOrInstructor(authContext, course);
 
         courseMapper.updateCourseFromRequest(request, course);
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
@@ -162,7 +157,6 @@ public class CourseServiceImpl implements CourseService {
         lesson.setId(UUID.randomUUID().toString());
         lessons.add(lesson);
         sortLessons(lessons);
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
@@ -181,7 +175,6 @@ public class CourseServiceImpl implements CourseService {
         Lesson lesson = findLesson(course, lessonId);
         lessonMapper.updateLessonFromRequest(request, lesson);
         sortLessons(ensureLessons(course));
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
@@ -203,7 +196,6 @@ public class CourseServiceImpl implements CourseService {
             throw new LessonNotFoundException();
         }
 
-        course.setUpdatedAt(Instant.now());
         courseRepository.save(course);
     }
 
@@ -222,7 +214,6 @@ public class CourseServiceImpl implements CourseService {
         }
 
         course.setStatus(CourseStatus.PUBLISHED);
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);

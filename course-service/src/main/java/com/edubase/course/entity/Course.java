@@ -4,7 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
@@ -27,8 +29,13 @@ public class Course {
     private CourseStatus status;
     private String instructorId;
     private String categoryId;
+
+    @CreatedDate
     private Instant createdAt;
+
+    @LastModifiedDate
     private Instant updatedAt;
+
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();
 }
