@@ -10,6 +10,8 @@ spring:
 jwt:
   expiration: 3h
   refreshTokenExpiration: 6h
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
 
 app:
   gateway-url: ${GATEWAY_URL:http://localhost:8090}

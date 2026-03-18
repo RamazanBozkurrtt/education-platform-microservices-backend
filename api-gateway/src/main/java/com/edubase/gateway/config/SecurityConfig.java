@@ -1,6 +1,9 @@
 package com.edubase.gateway.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.edubase.gateway.security.JwtAccessDeniedHandler;
+import com.edubase.gateway.security.JwtAuthenticationEntryPoint;
+import com.edubase.gateway.service.abstracts.RedisTokenService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -9,8 +12,6 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -20,15 +21,13 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
-import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
-import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
-import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -47,8 +46,13 @@ import java.util.stream.Collectors;
 @Configuration
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
+@RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
+
+    private final JwtAuthenticationEntryPoint authenticationEntryPoint;
+    private final JwtAccessDeniedHandler accessDeniedHandler;
+    private final RedisTokenService redisTokenService;
 
     @Value("${auth.debug:false}")
     private boolean authDebug;
@@ -65,6 +69,7 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_PATHS = {
             "/api/v1/auth/**",
+            "/courses/public/**",
             "/actuator/health",
             "/actuator/info",
             "/favicon.ico",
@@ -95,8 +100,8 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(authenticationEntryPoint())
-                        .accessDeniedHandler(accessDeniedHandler())
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
@@ -104,11 +109,25 @@ public class SecurityConfig {
     }
 
     @Bean
-    public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${jwt.secret}") String secret) {
+    public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${jwt.secret}") String secret,
+                                                 @Value("${jwt.issuer}") String issuer,
+                                                 @Value("${jwt.audience}") String audience) {
         SecretKey key = buildSecretKey(secret);
-        return NimbusReactiveJwtDecoder.withSecretKey(key)
+        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+
+        return token -> decoder.decode(token)
+                .flatMap(jwt -> {
+                    validateIssuerAndAudience(jwt, issuer, audience);
+                    return redisTokenService.isTokenBlacklisted(jwt.getId())
+                            .flatMap(blacklisted -> {
+                                if (blacklisted) {
+                                    return Mono.error(new BadJwtException("Token is blacklisted"));
+                                }
+                                return Mono.just(jwt);
+                            });
+                });
     }
 
     @Bean
@@ -135,28 +154,6 @@ public class SecurityConfig {
         });
 
         return new ReactiveJwtAuthenticationConverterAdapter(converter);
-    }
-
-    @Bean
-    public ServerAuthenticationEntryPoint authenticationEntryPoint() {
-        return (exchange, ex) -> {
-            log.warn("Unauthorized | method={} | path={} | msg={}",
-                    exchange.getRequest().getMethod(),
-                    exchange.getRequest().getPath().value(),
-                    ex.getMessage());
-            return writeError(exchange, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
-        };
-    }
-
-    @Bean
-    public ServerAccessDeniedHandler accessDeniedHandler() {
-        return (exchange, ex) -> {
-            log.warn("Forbidden | method={} | path={} | msg={}",
-                    exchange.getRequest().getMethod(),
-                    exchange.getRequest().getPath().value(),
-                    ex.getMessage());
-            return writeError(exchange, HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage());
-        };
     }
 
     @Bean
@@ -217,22 +214,19 @@ public class SecurityConfig {
         return new SecretKeySpec(keyBytes, "HmacSHA256");
     }
 
-    private Mono<Void> writeError(ServerWebExchange exchange, HttpStatus status, String code, String message) {
-        String safeMessage = sanitize(message);
-        String path = exchange.getRequest().getPath().value();
-        String body = "{\"error\":\"" + code + "\",\"message\":\"" + safeMessage + "\",\"path\":\"" + path + "\"}";
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-
-        var response = exchange.getResponse();
-        response.setStatusCode(status);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        return response.writeWith(Mono.just(response.bufferFactory().wrap(bytes)));
-    }
-
-    private String sanitize(String value) {
-        if (value == null) {
-            return "";
+    private void validateIssuerAndAudience(Jwt jwt, String issuer, String audience) {
+        if (issuer != null && !issuer.isBlank()) {
+            String actualIssuer = jwt.getClaimAsString("iss");
+            if (!issuer.equals(actualIssuer)) {
+                throw new BadJwtException("Invalid issuer");
+            }
         }
-        return value.replace("\"", "'");
+
+        if (audience != null && !audience.isBlank()) {
+            List<String> audiences = jwt.getAudience();
+            if (audiences == null || audiences.stream().noneMatch(audience::equals)) {
+                throw new BadJwtException("Invalid audience");
+            }
+        }
     }
 }

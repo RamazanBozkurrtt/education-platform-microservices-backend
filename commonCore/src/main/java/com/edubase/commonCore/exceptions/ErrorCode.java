@@ -13,6 +13,7 @@ public enum ErrorCode {
     AUTH_UNAUTHORIZED(1005, "Yetkisiz erişim!", 401),
     AUTH_TOKEN_IS_BLACKLISTED(1006,"Token Blacklist'e Alınmış",403),
     AUTH_REFRESH_TOKEN_CONFLICT(1007, "Refresh token zaten kullanilmis", 409),
+    AUTH_TOO_MANY_ATTEMPTS(1008, "Too many failed login attempts. Try again later.", 429),
 
     // User
     USER_NOT_FOUND(2001, "Kullanıcı bulunamadı", 404),

@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -49,13 +50,20 @@ public class SecurityConfig {
             "/actuator/info"
     };
 
+    private static final String[] SWAGGER_URLS = {
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/courses/**", "/courses/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/courses/public/**").permitAll()
+                        .requestMatchers(SWAGGER_URLS).permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
@@ -104,11 +112,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtDecoder jwtDecoder(@Value("${jwt.secret}") String secret) {
+    public JwtDecoder jwtDecoder(@Value("${jwt.secret}") String secret,
+                                 @Value("${jwt.issuer}") String issuer,
+                                 @Value("${jwt.audience}") String audience) {
         SecretKey key = buildSecretKey(secret);
-        return NimbusJwtDecoder.withSecretKey(key)
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+
+        return token -> {
+            Jwt jwt = decoder.decode(token);
+            validateIssuerAndAudience(jwt, issuer, audience);
+            return jwt;
+        };
     }
 
     private SecretKey buildSecretKey(String secret) {
@@ -128,5 +144,21 @@ public class SecurityConfig {
         }
 
         return new SecretKeySpec(keyBytes, "HmacSHA256");
+    }
+
+    private void validateIssuerAndAudience(Jwt jwt, String issuer, String audience) {
+        if (issuer != null && !issuer.isBlank()) {
+            String actualIssuer = jwt.getClaimAsString("iss");
+            if (!issuer.equals(actualIssuer)) {
+                throw new BadJwtException("Invalid issuer");
+            }
+        }
+
+        if (audience != null && !audience.isBlank()) {
+            List<String> audiences = jwt.getAudience();
+            if (audiences == null || audiences.stream().noneMatch(audience::equals)) {
+                throw new BadJwtException("Invalid audience");
+            }
+        }
     }
 }

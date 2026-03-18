@@ -3,6 +3,8 @@ server:
 
 jwt:
   secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
 
 auth:
   debug: ${AUTH_DEBUG:false}
@@ -29,7 +31,7 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                key-resolver: "#{@clientIpKeyResolver}"
+                key-resolver: "#{@rateLimitKeyResolver}"
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_AUTH_REPLENISH:5}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_AUTH_BURST:10}
                 redis-rate-limiter.requestedTokens: 1
@@ -41,9 +43,20 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                key-resolver: "#{@clientIpKeyResolver}"
+                key-resolver: "#{@rateLimitKeyResolver}"
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_USER_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_USER_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: course-service-route
+          uri: ${service.course.url}
+          predicates:
+            - Path=/courses/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
         - id: auth-service-docs
           uri: ${service.auth.url}
@@ -55,6 +68,12 @@ spring:
           uri: ${service.user.url}
           predicates:
             - Path=/v3/api-docs/user
+          filters:
+            - SetPath=/v3/api-docs
+        - id: course-service-docs
+          uri: ${service.course.url}
+          predicates:
+            - Path=/v3/api-docs/course
           filters:
             - SetPath=/v3/api-docs
 
@@ -76,3 +95,5 @@ springdoc:
         url: /v3/api-docs/auth
       - name: user-service
         url: /v3/api-docs/user
+      - name: course-service
+        url: /v3/api-docs/course

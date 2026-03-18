@@ -1,0 +1,27 @@
+package com.edubase.course.entity;
+
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Document(collection = "categories")
+public class Category {
+
+    private String id;
+    private String categoryName;
+
+    @CreatedDate
+    private String createdAt;
+
+    @LastModifiedDate
+    private String updatedAt;
+
+
+}

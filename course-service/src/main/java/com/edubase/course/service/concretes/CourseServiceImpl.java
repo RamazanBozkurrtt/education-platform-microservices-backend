@@ -25,11 +25,11 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -44,7 +44,11 @@ public class CourseServiceImpl implements CourseService {
     private final LessonMapper lessonMapper;
 
     @Override
-    @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+    @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
+    @CacheEvict(cacheNames = {
+            "coursesPublicById",
+            "coursesPublicPaged"
+    }, allEntries = true)
     public CourseResponse createCourse(AuthContext authContext, CourseCreateRequest request) {
         requireAdminOrInstructor(authContext);
 
@@ -52,25 +56,32 @@ public class CourseServiceImpl implements CourseService {
         course.setInstructorId(authContext.userId());
         course.setStatus(CourseStatus.DRAFT);
         course.setLessons(new ArrayList<>());
-        Instant now = Instant.now();
-        course.setCreatedAt(now);
-        course.setUpdatedAt(now);
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
     }
 
     @Override
-    @Cacheable(cacheNames = "coursesById", key = "#id")
-    public CourseResponse getCourseById(String id) {
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
+    public CourseResponse getCourseById(AuthContext authContext, String id) {
         Course course = findCourse(id);
+        requireAdminOrInstructor(authContext, course);
         sortLessons(ensureLessons(course));
         return courseMapper.toResponseFromEntity(course);
     }
 
     @Override
-    @Cacheable(cacheNames = "coursesPaged", key = "T(String).valueOf(#pageNumber).concat(':').concat(T(String).valueOf(#pageSize))")
-    public CustomPageResponse<CourseResponse> getCourses(int pageNumber, int pageSize) {
+    @Cacheable(cacheNames = "coursesPublicById", key = "#id")
+    public CourseResponse getPublicCourseById(String id) {
+        Course course = findPublishedCourse(id);
+        sortLessons(ensureLessons(course));
+        return courseMapper.toResponseFromEntity(course);
+    }
+
+    @Override
+    @PreAuthorize("@courseSecurity.isAdmin(#p0)")
+    public CustomPageResponse<CourseResponse> getCourses(AuthContext authContext, int pageNumber, int pageSize) {
+        requireAdmin(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Course> page = courseRepository.findAll(pageRequest);
         List<CourseResponse> responses = page.getContent().stream()
@@ -80,25 +91,49 @@ public class CourseServiceImpl implements CourseService {
     }
 
     @Override
+    @Cacheable(cacheNames = "coursesPublicPaged", key = "T(String).valueOf(#pageNumber).concat(':').concat(T(String).valueOf(#pageSize))")
+    public CustomPageResponse<CourseResponse> getPublicCourses(int pageNumber, int pageSize) {
+        PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Course> page = courseRepository.findAllByStatus(CourseStatus.PUBLISHED, pageRequest);
+        List<CourseResponse> responses = page.getContent().stream()
+                .map(courseMapper::toResponseFromEntity)
+                .toList();
+        return CustomPageResponse.of(page, responses);
+    }
+
+    @Override
+    @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
+    public CustomPageResponse<CourseResponse> getMyCourses(AuthContext authContext, int pageNumber, int pageSize) {
+        requireAdminOrInstructor(authContext);
+        PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Course> page = courseRepository.findAllByInstructorId(authContext.userId(), pageRequest);
+        List<CourseResponse> responses = page.getContent().stream()
+                .map(courseMapper::toResponseFromEntity)
+                .toList();
+        return CustomPageResponse.of(page, responses);
+    }
+
+    @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
-            @CacheEvict(cacheNames = "coursesById", key = "#id"),
-            @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public CourseResponse updateCourse(AuthContext authContext, String id, CourseUpdateRequest request) {
         Course course = findCourse(id);
         requireAdminOrInstructor(authContext, course);
 
         courseMapper.updateCourseFromRequest(request, course);
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
     }
 
     @Override
+    @PreAuthorize("@courseSecurity.isAdmin(#p0)")
     @Caching(evict = {
-            @CacheEvict(cacheNames = "coursesById", key = "#id"),
-            @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public void deleteCourse(AuthContext authContext, String id) {
         requireAdmin(authContext);
@@ -108,9 +143,10 @@ public class CourseServiceImpl implements CourseService {
     }
 
     @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
-            @CacheEvict(cacheNames = "coursesById", key = "#courseId"),
-            @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public CourseResponse addLesson(AuthContext authContext, String courseId, LessonCreateRequest request) {
         Course course = findCourse(courseId);
@@ -121,16 +157,16 @@ public class CourseServiceImpl implements CourseService {
         lesson.setId(UUID.randomUUID().toString());
         lessons.add(lesson);
         sortLessons(lessons);
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
     }
 
     @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
-            @CacheEvict(cacheNames = "coursesById", key = "#courseId"),
-            @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public CourseResponse updateLesson(AuthContext authContext, String courseId, String lessonId, LessonUpdateRequest request) {
         Course course = findCourse(courseId);
@@ -139,16 +175,16 @@ public class CourseServiceImpl implements CourseService {
         Lesson lesson = findLesson(course, lessonId);
         lessonMapper.updateLessonFromRequest(request, lesson);
         sortLessons(ensureLessons(course));
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
     }
 
     @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
-            @CacheEvict(cacheNames = "coursesById", key = "#courseId"),
-            @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public void deleteLesson(AuthContext authContext, String courseId, String lessonId) {
         Course course = findCourse(courseId);
@@ -160,14 +196,14 @@ public class CourseServiceImpl implements CourseService {
             throw new LessonNotFoundException();
         }
 
-        course.setUpdatedAt(Instant.now());
         courseRepository.save(course);
     }
 
     @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
-            @CacheEvict(cacheNames = "coursesById", key = "#id"),
-            @CacheEvict(cacheNames = "coursesPaged", allEntries = true)
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public CourseResponse publishCourse(AuthContext authContext, String id) {
         Course course = findCourse(id);
@@ -178,7 +214,6 @@ public class CourseServiceImpl implements CourseService {
         }
 
         course.setStatus(CourseStatus.PUBLISHED);
-        course.setUpdatedAt(Instant.now());
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
@@ -186,6 +221,11 @@ public class CourseServiceImpl implements CourseService {
 
     private Course findCourse(String id) {
         return courseRepository.findById(id).orElseThrow(CourseNotFoundException::new);
+    }
+
+    private Course findPublishedCourse(String id) {
+        return courseRepository.findByIdAndStatus(id, CourseStatus.PUBLISHED)
+                .orElseThrow(CourseNotFoundException::new);
     }
 
     private Lesson findLesson(Course course, String lessonId) {

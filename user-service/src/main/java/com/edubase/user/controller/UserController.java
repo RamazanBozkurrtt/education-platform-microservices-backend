@@ -118,18 +118,15 @@ public class UserController extends RestBaseController {
             throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
         }
 
-        Object claim = jwt.getClaim("userId");
-        if (claim instanceof Number number) {
-            return number.longValue();
+        String tokenId = jwt.getId();
+        if (tokenId == null || tokenId.isBlank()) {
+            return null;
         }
-        if (claim instanceof String value && !value.isBlank()) {
-            try {
-                return Long.parseLong(value);
-            } catch (NumberFormatException ignore) {
-                return null;
-            }
+        try {
+            return Long.parseLong(tokenId);
+        } catch (NumberFormatException ignore) {
+            return null;
         }
-        return null;
     }
 
 }
