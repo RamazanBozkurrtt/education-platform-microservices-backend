@@ -6,6 +6,7 @@ import com.edubase.auth.entity.Role;
 import com.edubase.auth.entity.User;
 import com.edubase.auth.security.UserPrincipal;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -20,6 +21,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Collection;
 import java.util.function.Function;
 
 @Service
@@ -40,36 +42,58 @@ public class JwtService {
 
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
         claims.put("roles", user.getRoles().stream().map(Role::getName).toList());
         var authorities = user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .toList();
-        return generateToken(claims, new UserPrincipal(user, authorities));
+        return buildToken(claims, new UserPrincipal(user, authorities), String.valueOf(user.getId()), jwtProperties.getExpiration().toMillis());
     }
 
     public String generateToken(
             Map<String, Object> extraClaims,
             UserDetails userDetails
     ) {
-        return buildToken(extraClaims, userDetails, jwtProperties.getExpiration().toMillis());
+        String tokenId = null;
+        if (userDetails instanceof UserPrincipal principal && principal.user() != null && principal.user().getId() != null) {
+            tokenId = String.valueOf(principal.user().getId());
+        }
+        return buildToken(extraClaims, userDetails, tokenId, jwtProperties.getExpiration().toMillis());
     }
 
     private String buildToken(
             Map<String, Object> extraClaims,
             UserDetails userDetails,
+            String tokenId,
             long expiration
     ) {
+        Map<String, Object> claims = new HashMap<>();
+        if (extraClaims != null) {
+            claims.putAll(extraClaims);
+        }
+        if (jwtProperties.getIssuer() != null && !jwtProperties.getIssuer().isBlank()) {
+            claims.put("iss", jwtProperties.getIssuer());
+        }
+        if (jwtProperties.getAudience() != null && !jwtProperties.getAudience().isBlank()) {
+            claims.put("aud", java.util.List.of(jwtProperties.getAudience()));
+        }
+        if (userDetails != null && userDetails.getUsername() != null && !userDetails.getUsername().isBlank()) {
+            claims.putIfAbsent("username", userDetails.getUsername());
+        }
+
         Instant now = Instant.now();
-        return Jwts
+        var builder = Jwts
                 .builder()
-                .claims(extraClaims)
-                .id(UUID.randomUUID().toString())
+                .claims(claims)
                 .subject(userDetails.getUsername())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expiration)))
-                .signWith(getSignInKey(), Jwts.SIG.HS256)
-                .compact();
+                .signWith(getSignInKey(), Jwts.SIG.HS256);
+
+        if (tokenId != null && !tokenId.isBlank()) {
+            builder.id(tokenId);
+        }
+
+        return builder.compact();
     }
 
 
@@ -79,7 +103,7 @@ public class JwtService {
                 .toList();
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("jti", UUID.randomUUID().toString());
-        String token = buildToken(extraClaims, new UserPrincipal(user, authorities), jwtProperties.getRefreshTokenExpiration().toMillis());
+        String token = buildToken(extraClaims, new UserPrincipal(user, authorities), String.valueOf(user.getId()), jwtProperties.getRefreshTokenExpiration().toMillis());
         return RefreshToken.builder()
                 .refreshToken(token)
                 .revoked(false)
@@ -113,12 +137,49 @@ public class JwtService {
 
     //+
     private Claims extractAllClaims(String token) {
-        return Jwts
+        Claims claims = Jwts
                 .parser()
                 .verifyWith(getSignInKey())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+
+        validateIssuerAndAudience(claims);
+        return claims;
+    }
+
+    private void validateIssuerAndAudience(Claims claims) {
+        String expectedIssuer = jwtProperties.getIssuer();
+        if (expectedIssuer != null && !expectedIssuer.isBlank()) {
+            String actualIssuer = claims.getIssuer();
+            if (!expectedIssuer.equals(actualIssuer)) {
+                throw new JwtException("Invalid issuer");
+            }
+        }
+
+        String expectedAudience = jwtProperties.getAudience();
+        if (expectedAudience == null || expectedAudience.isBlank()) {
+            return;
+        }
+
+        Object audienceClaim = claims.get("aud");
+        if (audienceClaim instanceof String value) {
+            if (!expectedAudience.equals(value)) {
+                throw new JwtException("Invalid audience");
+            }
+            return;
+        }
+
+        if (audienceClaim instanceof Collection<?> values) {
+            boolean match = values.stream()
+                    .anyMatch(item -> expectedAudience.equals(String.valueOf(item)));
+            if (!match) {
+                throw new JwtException("Invalid audience");
+            }
+            return;
+        }
+
+        throw new JwtException("Invalid audience");
     }
 
     private SecretKey getSignInKey() {

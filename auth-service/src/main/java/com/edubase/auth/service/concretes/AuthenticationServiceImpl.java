@@ -23,14 +23,15 @@ import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -38,9 +39,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -50,6 +53,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    private static final int MAX_LOGIN_ATTEMPTS = 10;
+    private static final Duration LOGIN_BLOCK_DURATION = Duration.ofMinutes(2);
+    private static final String LOGIN_FAIL_PREFIX = "login:fail:";
+    private static final String LOGIN_BLOCK_PREFIX = "login:block:";
 
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -62,6 +69,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final RedisTokenService redisTokenService;
     private final EmailService emailService;
     private final AccountReactivationProperties accountReactivationProperties;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -97,29 +105,55 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     //LOGIN
     @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
-        var user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UsernameNotFoundException(request.email()));
+        String email = normalizeEmail(request.email());
+
+        if (isLoginBlocked(email)) {
+            throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
+        }
+
+        var user = userRepository.findByEmail(email)
+                .orElseThrow(() -> {
+                    boolean blocked = recordLoginFailure(email);
+                    if (blocked) {
+                        return new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
+                    }
+                    return new BusinessException(ErrorCode.AUTH_LOGIN_FAILED);
+                });
 
         if (user.getUserStatus() == UserStatus.DEACTIVATED) {
             if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+                boolean blocked = recordLoginFailure(email);
+                if (blocked) {
+                    throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
+                }
                 throw new BadCredentialsException("Kullanici adi veya sifre hatali");
             }
             String reactivationLink = createReactivationLink(user);
             emailService.sendAccountReactivationEmail(user.getEmail(), reactivationLink);
+            clearLoginFailures(email);
             return AuthenticationResponse.forReactivation(reactivationLink);
         }
 
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.email(),
-                        request.password()
-                )
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            email,
+                            request.password()
+                    )
+            );
+        } catch (BadCredentialsException ex) {
+            boolean blocked = recordLoginFailure(email);
+            if (blocked) {
+                throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
+            }
+            throw new BusinessException(ErrorCode.AUTH_LOGIN_FAILED);
+        }
 
         var token = jwtService.generateToken(user);
         revokeAllUserRefreshTokens(user);
         var refreshToken = jwtService.generateRefreshToken(user);
         refreshTokenRepository.save(refreshToken);
+        clearLoginFailures(email);
         return AuthenticationResponse.forTokens(token, refreshToken.getRefreshToken());
     }
 
@@ -229,6 +263,51 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algoritmasi bulunamadi", e);
         }
+    }
+
+    private boolean isLoginBlocked(String email) {
+        if (!StringUtils.hasText(email)) {
+            return false;
+        }
+        return redisTemplate.hasKey(blockKey(email));
+    }
+
+    private boolean recordLoginFailure(String email) {
+        if (!StringUtils.hasText(email)) {
+            return false;
+        }
+        String key = failKey(email);
+        Long attempts = redisTemplate.opsForValue().increment(key);
+        if (attempts != null && attempts == 1L) {
+            redisTemplate.expire(key, LOGIN_BLOCK_DURATION);
+        }
+        if (attempts != null && attempts >= MAX_LOGIN_ATTEMPTS) {
+            redisTemplate.opsForValue().set(blockKey(email), "1", LOGIN_BLOCK_DURATION);
+            return true;
+        }
+        return false;
+    }
+
+    private void clearLoginFailures(String email) {
+        if (!StringUtils.hasText(email)) {
+            return;
+        }
+        redisTemplate.delete(List.of(failKey(email), blockKey(email)));
+    }
+
+    private String failKey(String email) {
+        return LOGIN_FAIL_PREFIX + email;
+    }
+
+    private String blockKey(String email) {
+        return LOGIN_BLOCK_PREFIX + email;
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null) {
+            return "";
+        }
+        return email.trim().toLowerCase();
     }
 
     /*

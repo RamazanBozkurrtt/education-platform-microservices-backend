@@ -2,6 +2,7 @@ package com.edubase.gateway.config;
 
 import com.edubase.gateway.security.JwtAccessDeniedHandler;
 import com.edubase.gateway.security.JwtAuthenticationEntryPoint;
+import com.edubase.gateway.service.abstracts.RedisTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -50,6 +52,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
     private final JwtAccessDeniedHandler accessDeniedHandler;
+    private final RedisTokenService redisTokenService;
 
     @Value("${auth.debug:false}")
     private boolean authDebug;
@@ -106,11 +109,25 @@ public class SecurityConfig {
     }
 
     @Bean
-    public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${jwt.secret}") String secret) {
+    public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${jwt.secret}") String secret,
+                                                 @Value("${jwt.issuer}") String issuer,
+                                                 @Value("${jwt.audience}") String audience) {
         SecretKey key = buildSecretKey(secret);
-        return NimbusReactiveJwtDecoder.withSecretKey(key)
+        NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+
+        return token -> decoder.decode(token)
+                .flatMap(jwt -> {
+                    validateIssuerAndAudience(jwt, issuer, audience);
+                    return redisTokenService.isTokenBlacklisted(jwt.getId())
+                            .flatMap(blacklisted -> {
+                                if (blacklisted) {
+                                    return Mono.error(new BadJwtException("Token is blacklisted"));
+                                }
+                                return Mono.just(jwt);
+                            });
+                });
     }
 
     @Bean
@@ -195,5 +212,21 @@ public class SecurityConfig {
         }
 
         return new SecretKeySpec(keyBytes, "HmacSHA256");
+    }
+
+    private void validateIssuerAndAudience(Jwt jwt, String issuer, String audience) {
+        if (issuer != null && !issuer.isBlank()) {
+            String actualIssuer = jwt.getClaimAsString("iss");
+            if (!issuer.equals(actualIssuer)) {
+                throw new BadJwtException("Invalid issuer");
+            }
+        }
+
+        if (audience != null && !audience.isBlank()) {
+            List<String> audiences = jwt.getAudience();
+            if (audiences == null || audiences.stream().noneMatch(audience::equals)) {
+                throw new BadJwtException("Invalid audience");
+            }
+        }
     }
 }

@@ -18,7 +18,7 @@ public class AuditorAwareImpl implements AuditorAware<Long> {
         }
 
         if (authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
-            Long userId = extractLongClaim(jwtAuthenticationToken.getToken(), "userId");
+            Long userId = extractUserId(jwtAuthenticationToken.getToken());
             if (userId != null) {
                 return Optional.of(userId);
             }
@@ -26,7 +26,7 @@ public class AuditorAwareImpl implements AuditorAware<Long> {
 
         Object principal = authentication.getPrincipal();
         if (principal instanceof Jwt jwt) {
-            Long userId = extractLongClaim(jwt, "userId");
+            Long userId = extractUserId(jwt);
             if (userId != null) {
                 return Optional.of(userId);
             }
@@ -35,18 +35,15 @@ public class AuditorAwareImpl implements AuditorAware<Long> {
         return Optional.empty();
     }
 
-    private Long extractLongClaim(Jwt jwt, String claimName) {
-        Object value = jwt.getClaim(claimName);
-        if (value instanceof Number number) {
-            return number.longValue();
+    private Long extractUserId(Jwt jwt) {
+        String tokenId = jwt.getId();
+        if (tokenId == null || tokenId.isBlank()) {
+            return null;
         }
-        if (value instanceof String str) {
-            try {
-                return Long.parseLong(str);
-            } catch (NumberFormatException ignore) {
-                return null;
-            }
+        try {
+            return Long.parseLong(tokenId);
+        } catch (NumberFormatException ignore) {
+            return null;
         }
-        return null;
     }
 }

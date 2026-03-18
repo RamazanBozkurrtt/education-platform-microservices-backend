@@ -1,8 +1,11 @@
 package com.edubase.gateway.service.abstracts;
 
+import reactor.core.publisher.Mono;
+
 public interface RedisTokenService {
 
-    public boolean isTokenBlacklisted(String token);
+    Mono<Void> blacklistToken(String tokenId, long expiresAtMillis);
 
+    Mono<Boolean> isTokenBlacklisted(String tokenId);
 
 }

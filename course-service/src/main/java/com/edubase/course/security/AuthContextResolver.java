@@ -25,14 +25,11 @@ public class AuthContextResolver {
     }
 
     private String extractUserId(Jwt jwt) {
-        Object claim = jwt.getClaim("userId");
-        if (claim instanceof Number number) {
-            return String.valueOf(number.longValue());
+        String tokenId = jwt.getId();
+        if (tokenId == null || tokenId.isBlank()) {
+            return null;
         }
-        if (claim instanceof String value && !value.isBlank()) {
-            return value.trim();
-        }
-        return null;
+        return tokenId.trim();
     }
 
     private UserRole extractRole(Jwt jwt) {

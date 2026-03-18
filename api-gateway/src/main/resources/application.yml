@@ -3,6 +3,8 @@ server:
 
 jwt:
   secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
 
 auth:
   debug: ${AUTH_DEBUG:false}
@@ -29,7 +31,7 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                key-resolver: "#{@clientIpKeyResolver}"
+                key-resolver: "#{@rateLimitKeyResolver}"
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_AUTH_REPLENISH:5}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_AUTH_BURST:10}
                 redis-rate-limiter.requestedTokens: 1
@@ -41,7 +43,7 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                key-resolver: "#{@clientIpKeyResolver}"
+                key-resolver: "#{@rateLimitKeyResolver}"
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_USER_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_USER_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
@@ -52,7 +54,7 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                key-resolver: "#{@clientIpKeyResolver}"
+                key-resolver: "#{@rateLimitKeyResolver}"
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
                 redis-rate-limiter.requestedTokens: 1

@@ -17,7 +17,7 @@ public class RedisTokenServiceImpl implements RedisTokenService {
 
     private static final String BLACKLIST_PREFIX = "blacklist:";
 
-    private JwtService  jwtService;
+    private final JwtService jwtService;
 
     @Override
     public void blacklistToken(String token, long expiresAtMillis) {
