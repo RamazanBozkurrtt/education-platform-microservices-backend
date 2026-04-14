@@ -11,6 +11,7 @@ import com.edubase.course.dto.response.CourseResponse;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
+import com.edubase.course.grpc.UserGrpcClient;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
@@ -45,6 +46,9 @@ class CourseServiceImplTest {
 
     @Mock
     private LessonMapper lessonMapper;
+
+    @Mock
+    private UserGrpcClient userGrpcClient;
 
     @InjectMocks
     private CourseServiceImpl courseService;

@@ -14,6 +14,7 @@ import com.edubase.course.entity.Lesson;
 import com.edubase.course.exception.CourseNotFoundException;
 import com.edubase.course.exception.LessonNotFoundException;
 import com.edubase.course.exception.PublishValidationException;
+import com.edubase.course.grpc.UserGrpcClient;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
@@ -30,6 +31,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -42,6 +44,7 @@ public class CourseServiceImpl implements CourseService {
     private final CourseRepository courseRepository;
     private final CourseMapper courseMapper;
     private final LessonMapper lessonMapper;
+    private final UserGrpcClient userGrpcClient;
 
     @Override
     @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
@@ -51,11 +54,19 @@ public class CourseServiceImpl implements CourseService {
     }, allEntries = true)
     public CourseResponse createCourse(AuthContext authContext, CourseCreateRequest request) {
         requireAdminOrInstructor(authContext);
+        if (authContext.role() == UserRole.INSTRUCTOR) {
+            userGrpcClient.assertUserExists(authContext.userId());
+        }
 
         Course course = courseMapper.toEntityFromRequest(request);
         course.setInstructorId(authContext.userId());
         course.setStatus(CourseStatus.DRAFT);
         course.setLessons(new ArrayList<>());
+        Instant now = Instant.now();
+        if (course.getCreatedAt() == null) {
+            course.setCreatedAt(now);
+        }
+        course.setUpdatedAt(now);
 
         Course saved = courseRepository.save(course);
         return courseMapper.toResponseFromEntity(saved);
