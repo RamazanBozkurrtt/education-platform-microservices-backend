@@ -23,6 +23,7 @@
     <modules>
         <module>commonCore</module>
         <module>commonJpa</module>
+        <module>commonGrpcContracts</module>
         <module>auth-service</module>
         <module>user-service</module>
         <module>api-gateway</module>
@@ -36,7 +37,7 @@
         <spring-cloud.version>2023.0.1</spring-cloud.version>
 
         <!-- Ortak tool versiyonları -->
-        <lombok.version>1.18.30</lombok.version>
+        <lombok.version>1.18.38</lombok.version>
 
         <!-- JJWT versiyonu (Spring BOM her zaman yönetmeyebilir) -->
         <jjwt.version>0.12.5</jjwt.version>
@@ -45,6 +46,10 @@
 
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok.mapstruct.binding.version>0.2.0</lombok.mapstruct.binding.version>
+        <grpc.version>1.64.0</grpc.version>
+        <protobuf.version>3.25.3</protobuf.version>
+        <byte-buddy.version>1.17.8</byte-buddy.version>
+        <mockito.version>5.15.2</mockito.version>
 
     </properties>
 
@@ -59,6 +64,13 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>${grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
             <dependency>
                 <groupId>com.edubase</groupId>
@@ -69,6 +81,11 @@
             <dependency>
                 <groupId>com.edubase</groupId>
                 <artifactId>commonJpa</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.edubase</groupId>
+                <artifactId>common-grpc-contracts</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -118,6 +135,32 @@
                 <version>${mapstruct.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>${byte-buddy.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>${byte-buddy.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-junit-jupiter</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
+            </dependency>
+
 
         </dependencies>
     </dependencyManagement>
@@ -134,6 +177,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
                     <configuration>
                         <source>${java.version}</source>
                         <target>${java.version}</target>

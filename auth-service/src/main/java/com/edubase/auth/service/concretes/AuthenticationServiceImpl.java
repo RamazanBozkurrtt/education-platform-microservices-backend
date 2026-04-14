@@ -12,6 +12,7 @@ import com.edubase.auth.entity.Role;
 import com.edubase.auth.entity.User;
 import com.edubase.auth.entity.UserStatus;
 import com.edubase.auth.jwt.JwtService;
+import com.edubase.auth.messaging.UserRegisteredDomainEvent;
 import com.edubase.auth.repository.AccountReactivationTokenRepository;
 import com.edubase.auth.repository.RefreshTokenRepository;
 import com.edubase.auth.repository.RoleRepository;
@@ -24,6 +25,7 @@ import com.edubase.commonCore.exceptions.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -70,6 +72,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final EmailService emailService;
     private final AccountReactivationProperties accountReactivationProperties;
     private final RedisTemplate<String, String> redisTemplate;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -88,6 +91,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .roles(new HashSet<>(Set.of(userRole)))
                 .build();
         var userDB = userRepository.save(user);
+        applicationEventPublisher.publishEvent(new UserRegisteredDomainEvent(userDB.getId(), userDB.getEmail()));
         return userMapper.toResponseFromEntity(userDB);
     }
 

@@ -6,6 +6,7 @@ WORKDIR /app
 COPY pom.xml .
 COPY commonCore/pom.xml commonCore/
 COPY commonJpa/pom.xml commonJpa/
+COPY commonGrpcContracts/pom.xml commonGrpcContracts/
 COPY auth-service/pom.xml auth-service/
 COPY user-service/pom.xml user-service/
 COPY api-gateway/pom.xml api-gateway/

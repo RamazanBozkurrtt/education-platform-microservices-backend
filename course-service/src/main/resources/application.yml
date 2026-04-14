@@ -17,3 +17,9 @@ course:
     base-path: ${COURSE_MEDIA_BASE_PATH:videos}
   sample:
     enabled: ${COURSE_SAMPLE_ENABLED:true}
+
+grpc:
+  client:
+    user:
+      host: ${USER_GRPC_HOST:localhost}
+      port: ${USER_GRPC_PORT:9091}

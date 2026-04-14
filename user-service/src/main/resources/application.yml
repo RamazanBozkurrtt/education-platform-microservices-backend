@@ -15,6 +15,17 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_GROUP_USER_SERVICE:user-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.edubase.commonCore.events
+        spring.json.value.default.type: com.edubase.commonCore.events.UserRegisteredEvent
+        spring.json.use.type.headers: false
 
   jpa:
     open-in-view: false
@@ -34,6 +45,9 @@ jwt:
 
 app:
   gateway-url: ${GATEWAY_URL:http://localhost:8090}
+  kafka:
+    topics:
+      user-registered: ${KAFKA_TOPIC_USER_REGISTERED:user.registered.v1}
 
 auth:
   debug: ${AUTH_DEBUG:false}
@@ -47,3 +61,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+grpc:
+  server:
+    port: ${USER_GRPC_PORT:9091}

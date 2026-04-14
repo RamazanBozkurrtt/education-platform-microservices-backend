@@ -7,6 +7,7 @@ WORKDIR /app
 COPY pom.xml .
 COPY commonCore/pom.xml commonCore/
 COPY commonJpa/pom.xml commonJpa/
+COPY commonGrpcContracts/pom.xml commonGrpcContracts/
 COPY auth-service/pom.xml auth-service/
 
 RUN mvn dependency:go-offline
