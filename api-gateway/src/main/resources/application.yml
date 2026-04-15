@@ -58,6 +58,17 @@ spring:
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
+        - id: enrollment-service-route
+          uri: ${service.enrollment.url}
+          predicates:
+            - Path=/api/v1/enrollments/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_ENROLLMENT_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ENROLLMENT_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
         - id: auth-service-docs
           uri: ${service.auth.url}
           predicates:
@@ -74,6 +85,12 @@ spring:
           uri: ${service.course.url}
           predicates:
             - Path=/v3/api-docs/course
+          filters:
+            - SetPath=/v3/api-docs
+        - id: enrollment-service-docs
+          uri: ${service.enrollment.url}
+          predicates:
+            - Path=/v3/api-docs/enrollment
           filters:
             - SetPath=/v3/api-docs
 
@@ -97,3 +114,5 @@ springdoc:
         url: /v3/api-docs/user
       - name: course-service
         url: /v3/api-docs/course
+      - name: enrollment-service
+        url: /v3/api-docs/enrollment

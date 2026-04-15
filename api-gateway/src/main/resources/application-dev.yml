@@ -5,6 +5,8 @@ service:
     url: ${USER_SERVICE_URL:http://localhost:8081}
   course:
     url: ${COURSE_SERVICE_URL:http://localhost:8083}
+  enrollment:
+    url: ${ENROLLMENT_SERVICE_URL:http://localhost:8084}
 
 spring:
   data:
