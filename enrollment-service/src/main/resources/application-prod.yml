@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${ENROLLMENT_DB_URL}
+    username: ${ENROLLMENT_DB_USERNAME}
+    password: ${ENROLLMENT_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+management:
+  endpoint:
+    health:
+      show-details: never

@@ -25,6 +25,8 @@ public enum ErrorCode {
     COURSE_NOT_FOUND(7001, "Course not found", 404),
     COURSE_PUBLISH_INVALID(7002, "Course cannot be published", 400),
     COURSE_LESSON_NOT_FOUND(7003, "Lesson not found", 404),
+    ENROLLMENT_NOT_FOUND(8001, "Enrollment not found", 404),
+    ENROLLMENT_ALREADY_EXISTS(8002, "Enrollment already exists", 409),
 
     // General
     INTERNAL_ERROR(5000, "Bilinmeyen bir hata oluştu", 500),

@@ -19,6 +19,8 @@ course:
     enabled: ${COURSE_SAMPLE_ENABLED:true}
 
 grpc:
+  server:
+    port: ${COURSE_GRPC_PORT:9092}
   client:
     user:
       host: ${USER_GRPC_HOST:localhost}

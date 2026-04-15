@@ -1,0 +1,57 @@
+server:
+  port: ${ENROLLMENT_SERVICE_PORT:8084}
+
+spring:
+  application:
+    name: enrollment-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
+
+app:
+  gateway-url: ${GATEWAY_URL:http://localhost:8090}
+  kafka:
+    topics:
+      enrollment-created: ${KAFKA_TOPIC_ENROLLMENT_CREATED:enrollment.created.v1}
+      enrollment-cancelled: ${KAFKA_TOPIC_ENROLLMENT_CANCELLED:enrollment.cancelled.v1}
+
+auth:
+  debug: ${AUTH_DEBUG:false}
+
+grpc:
+  client:
+    user:
+      host: ${USER_GRPC_HOST:localhost}
+      port: ${USER_GRPC_PORT:9091}
+    course:
+      host: ${COURSE_GRPC_HOST:localhost}
+      port: ${COURSE_GRPC_PORT:9092}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
