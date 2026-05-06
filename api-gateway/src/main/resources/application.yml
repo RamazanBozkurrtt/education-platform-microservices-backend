@@ -3,8 +3,8 @@ server:
 
 jwt:
   secret: ${JWT_SECRET}
-  issuer: ${JWT_ISSUER:edubase-auth}
-  audience: ${JWT_AUDIENCE:api-gateway}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
 
 auth:
   debug: ${AUTH_DEBUG:false}
@@ -13,7 +13,9 @@ spring:
   application:
     name: api-gateway
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:local}
+    group:
+      dev: local
   cloud:
     gateway:
       globalcors:
@@ -25,7 +27,7 @@ spring:
             allowCredentials: ${cors.allow-credentials}
       routes:
         - id: auth-service-route
-          uri: ${service.auth.url}
+          uri: ${services.auth-service.url}
           predicates:
             - Path=/api/v1/auth/**
           filters:
@@ -37,7 +39,7 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
 
         - id: user-service-route
-          uri: ${service.user.url}
+          uri: ${services.user-service.url}
           predicates:
             - Path=/api/v1/users/**
           filters:
@@ -48,7 +50,7 @@ spring:
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_USER_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
         - id: course-service-route
-          uri: ${service.course.url}
+          uri: ${services.course-service.url}
           predicates:
             - Path=/courses/**
           filters:
@@ -58,8 +60,19 @@ spring:
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
+        - id: course-service-route-v1
+          uri: ${services.course-service.url}
+          predicates:
+            - Path=/api/v1/courses/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
         - id: enrollment-service-route
-          uri: ${service.enrollment.url}
+          uri: ${services.enrollment-service.url}
           predicates:
             - Path=/api/v1/enrollments/**
           filters:
@@ -70,25 +83,25 @@ spring:
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ENROLLMENT_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
         - id: auth-service-docs
-          uri: ${service.auth.url}
+          uri: ${services.auth-service.url}
           predicates:
             - Path=/v3/api-docs/auth
           filters:
             - SetPath=/v3/api-docs
         - id: user-service-docs
-          uri: ${service.user.url}
+          uri: ${services.user-service.url}
           predicates:
             - Path=/v3/api-docs/user
           filters:
             - SetPath=/v3/api-docs
         - id: course-service-docs
-          uri: ${service.course.url}
+          uri: ${services.course-service.url}
           predicates:
             - Path=/v3/api-docs/course
           filters:
             - SetPath=/v3/api-docs
         - id: enrollment-service-docs
-          uri: ${service.enrollment.url}
+          uri: ${services.enrollment-service.url}
           predicates:
             - Path=/v3/api-docs/enrollment
           filters:

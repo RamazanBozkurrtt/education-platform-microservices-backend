@@ -5,6 +5,7 @@ import java.util.Locale;
 public enum UserRole {
     ADMIN,
     INSTRUCTOR,
+    USER,
     STUDENT,
     UNKNOWN;
 

@@ -36,12 +36,24 @@ public class AuditorAwareImpl implements AuditorAware<Long> {
     }
 
     private Long extractUserId(Jwt jwt) {
+        Object userIdClaim = jwt.getClaim("user_id");
+        if (userIdClaim instanceof Number numberValue) {
+            return numberValue.longValue();
+        }
+        if (userIdClaim instanceof String stringValue && !stringValue.isBlank()) {
+            try {
+                return Long.parseLong(stringValue.trim());
+            } catch (NumberFormatException ignore) {
+                return null;
+            }
+        }
+
         String tokenId = jwt.getId();
         if (tokenId == null || tokenId.isBlank()) {
             return null;
         }
         try {
-            return Long.parseLong(tokenId);
+            return Long.parseLong(tokenId.trim());
         } catch (NumberFormatException ignore) {
             return null;
         }

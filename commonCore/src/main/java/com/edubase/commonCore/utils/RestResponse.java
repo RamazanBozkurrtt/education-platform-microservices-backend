@@ -32,7 +32,7 @@ public class RestResponse<T> {
         return RestResponse.<T>builder()
                 .success(true)
                 .status(201)
-                .message("Created")
+                .message("Hesap Başarılı bir şekilde oluşturuldu!")
                 .data(data)
                 .timestamp(System.currentTimeMillis())
                 .build();

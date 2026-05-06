@@ -5,9 +5,11 @@ spring:
   application:
     name: enrollment-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:local}
+    group:
+      dev: local
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -25,11 +27,11 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
-  issuer: ${JWT_ISSUER:edubase-auth}
-  audience: ${JWT_AUDIENCE:api-gateway}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
 
 app:
-  gateway-url: ${GATEWAY_URL:http://localhost:8090}
+  gateway-url: ${services.api-gateway.url}
   kafka:
     topics:
       enrollment-created: ${KAFKA_TOPIC_ENROLLMENT_CREATED:enrollment.created.v1}
@@ -45,7 +47,7 @@ grpc:
       port: ${USER_GRPC_PORT:9091}
     course:
       host: ${COURSE_GRPC_HOST:localhost}
-      port: ${COURSE_GRPC_PORT:9092}
+      port: ${COURSE_GRPC_PORT:9093}
 
 management:
   endpoints:

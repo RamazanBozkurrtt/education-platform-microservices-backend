@@ -2,6 +2,7 @@ package com.edubase.course.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -18,6 +19,11 @@ public class LessonCreateRequest {
     @Size(max = 200, message = "Title must be at most 200 characters")
     private String title;
 
+    @NotBlank(message = "Summary title is required")
+    @Size(max = 80, message = "Summary title must be at most 80 characters")
+    @Pattern(regexp = "^\\S+(?:\\s+\\S+)?$", message = "Summary title must be 1 or 2 words")
+    private String summaryTitle;
+
     @NotBlank(message = "Video URL is required")
     @Size(max = 1000, message = "Video URL must be at most 1000 characters")
     private String videoUrl;
@@ -29,4 +35,6 @@ public class LessonCreateRequest {
     @NotNull(message = "Order index is required")
     @PositiveOrZero(message = "Order index must be zero or positive")
     private Integer orderIndex;
+
+    private boolean completed;
 }

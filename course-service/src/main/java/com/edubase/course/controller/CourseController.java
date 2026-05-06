@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/courses")
+@RequestMapping({"/courses", "/api/v1/courses"})
 public class CourseController extends RestBaseController {
 
     private final CourseService courseService;

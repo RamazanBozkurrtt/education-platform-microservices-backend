@@ -79,4 +79,18 @@ public class AuthController extends RestBaseController {
         return noContent();
     }
 
+    @PutMapping("/change-password")
+    public ResponseEntity<RestResponse<String>> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                                               @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (principal == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String email = principal.getUsername();
+        authenticationService.changePassword(request.oldPassword(), request.newPassword(), email);
+
+        return ok("Sifre basariyla degistirildi.");
+    }
+
 }

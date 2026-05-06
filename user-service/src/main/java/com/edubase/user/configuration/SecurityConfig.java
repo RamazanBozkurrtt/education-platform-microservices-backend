@@ -45,7 +45,8 @@ public class SecurityConfig {
             "/error",
             "/favicon.ico",
             "/actuator/health",
-            "/actuator/info"
+            "/actuator/info",
+            "/api/v1/users/public/**"
     };
 
     private static final String[] SWAGGER_URLS = {
@@ -62,6 +63,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .requestMatchers(SWAGGER_URLS).permitAll()
+                        .requestMatchers("/api/v1/internal/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception

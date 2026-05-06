@@ -1,5 +1,8 @@
 package com.edubase.course.service.concretes;
 
+import com.edubase.commonCore.events.InstructorStatus;
+import com.edubase.commonCore.exceptions.BusinessException;
+import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.course.configuration.mapper.CourseMapper;
 import com.edubase.course.configuration.mapper.LessonMapper;
 import com.edubase.course.dto.request.CourseCreateRequest;
@@ -8,13 +11,14 @@ import com.edubase.course.dto.request.LessonCreateRequest;
 import com.edubase.course.dto.request.LessonUpdateRequest;
 import com.edubase.course.dto.response.CourseResponse;
 import com.edubase.course.dto.response.CustomPageResponse;
+import com.edubase.course.dto.response.InstructorSummaryResponse;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
 import com.edubase.course.exception.CourseNotFoundException;
 import com.edubase.course.exception.LessonNotFoundException;
 import com.edubase.course.exception.PublishValidationException;
-import com.edubase.course.grpc.UserGrpcClient;
+import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
@@ -34,17 +38,25 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class CourseServiceImpl implements CourseService {
 
+    private static final String PUBLIC_COURSE_IMAGE_PATH_TEMPLATE = "/courses/public/%s/image";
+
     private final CourseRepository courseRepository;
     private final CourseMapper courseMapper;
     private final LessonMapper lessonMapper;
-    private final UserGrpcClient userGrpcClient;
+    private final InstructorProjectionService instructorProjectionService;
+    private final InstructorProjectionReconciliationService reconciliationService;
+    private final CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
 
     @Override
     @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
@@ -55,7 +67,7 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse createCourse(AuthContext authContext, CourseCreateRequest request) {
         requireAdminOrInstructor(authContext);
         if (authContext.role() == UserRole.INSTRUCTOR) {
-            userGrpcClient.assertUserExists(authContext.userId());
+            validateInstructorForCourseCreation(authContext.userId());
         }
 
         Course course = courseMapper.toEntityFromRequest(request);
@@ -69,7 +81,8 @@ public class CourseServiceImpl implements CourseService {
         course.setUpdatedAt(now);
 
         Course saved = courseRepository.save(course);
-        return courseMapper.toResponseFromEntity(saved);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
     }
 
     @Override
@@ -78,7 +91,7 @@ public class CourseServiceImpl implements CourseService {
         Course course = findCourse(id);
         requireAdminOrInstructor(authContext, course);
         sortLessons(ensureLessons(course));
-        return courseMapper.toResponseFromEntity(course);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(course));
     }
 
     @Override
@@ -86,7 +99,7 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse getPublicCourseById(String id) {
         Course course = findPublishedCourse(id);
         sortLessons(ensureLessons(course));
-        return courseMapper.toResponseFromEntity(course);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(course));
     }
 
     @Override
@@ -95,9 +108,9 @@ public class CourseServiceImpl implements CourseService {
         requireAdmin(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Course> page = courseRepository.findAll(pageRequest);
-        List<CourseResponse> responses = page.getContent().stream()
+        List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
-                .toList();
+                .toList());
         return CustomPageResponse.of(page, responses);
     }
 
@@ -106,21 +119,21 @@ public class CourseServiceImpl implements CourseService {
     public CustomPageResponse<CourseResponse> getPublicCourses(int pageNumber, int pageSize) {
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Course> page = courseRepository.findAllByStatus(CourseStatus.PUBLISHED, pageRequest);
-        List<CourseResponse> responses = page.getContent().stream()
+        List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
-                .toList();
+                .toList());
         return CustomPageResponse.of(page, responses);
     }
 
     @Override
-    @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
+    @PreAuthorize("@courseSecurity.isAuthenticatedUser(#p0)")
     public CustomPageResponse<CourseResponse> getMyCourses(AuthContext authContext, int pageNumber, int pageSize) {
-        requireAdminOrInstructor(authContext);
+        requireAuthenticatedRole(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Course> page = courseRepository.findAllByInstructorId(authContext.userId(), pageRequest);
-        List<CourseResponse> responses = page.getContent().stream()
+        List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
-                .toList();
+                .toList());
         return CustomPageResponse.of(page, responses);
     }
 
@@ -137,7 +150,8 @@ public class CourseServiceImpl implements CourseService {
         courseMapper.updateCourseFromRequest(request, course);
 
         Course saved = courseRepository.save(course);
-        return courseMapper.toResponseFromEntity(saved);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
     }
 
     @Override
@@ -150,6 +164,7 @@ public class CourseServiceImpl implements CourseService {
         requireAdmin(authContext);
 
         Course course = findCourse(id);
+        courseSearchSyncKafkaPublisher.publishDelete(course);
         courseRepository.delete(course);
     }
 
@@ -170,7 +185,8 @@ public class CourseServiceImpl implements CourseService {
         sortLessons(lessons);
 
         Course saved = courseRepository.save(course);
-        return courseMapper.toResponseFromEntity(saved);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
     }
 
     @Override
@@ -188,7 +204,8 @@ public class CourseServiceImpl implements CourseService {
         sortLessons(ensureLessons(course));
 
         Course saved = courseRepository.save(course);
-        return courseMapper.toResponseFromEntity(saved);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
     }
 
     @Override
@@ -208,6 +225,7 @@ public class CourseServiceImpl implements CourseService {
         }
 
         courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishUpsert(course);
     }
 
     @Override
@@ -227,7 +245,72 @@ public class CourseServiceImpl implements CourseService {
         course.setStatus(CourseStatus.PUBLISHED);
 
         Course saved = courseRepository.save(course);
-        return courseMapper.toResponseFromEntity(saved);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
+    }
+
+    private CourseResponse enrichCourseResponse(CourseResponse response) {
+        if (response == null) {
+            return response;
+        }
+        response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
+        if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
+            return response;
+        }
+        InstructorSummaryResponse instructor = instructorProjectionService.findSummaryByInstructorId(response.getInstructorId())
+                .orElseGet(() -> buildMissingInstructor(response.getInstructorId()));
+        response.setInstructor(instructor);
+        return response;
+    }
+
+    private List<CourseResponse> enrichCourseResponses(List<CourseResponse> responses) {
+        if (responses == null || responses.isEmpty()) {
+            return responses;
+        }
+        HashSet<String> instructorIds = responses.stream()
+                .map(CourseResponse::getInstructorId)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<String, InstructorSummaryResponse> summariesById =
+                instructorProjectionService.findSummariesByInstructorIds(instructorIds);
+
+        for (CourseResponse response : responses) {
+            if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
+                continue;
+            }
+            InstructorSummaryResponse summary = summariesById.get(response.getInstructorId());
+            response.setInstructor(summary != null ? summary : buildMissingInstructor(response.getInstructorId()));
+        }
+        return responses;
+    }
+
+    private InstructorSummaryResponse buildMissingInstructor(String instructorId) {
+        return InstructorSummaryResponse.builder()
+                .instructorId(instructorId)
+                .fullName("Unknown Instructor")
+                .email(null)
+                .profileImageUrl(null)
+                .headline(null)
+                .status(InstructorStatus.UNKNOWN)
+                .build();
+    }
+
+    private void validateInstructorForCourseCreation(String instructorId) {
+        Optional<InstructorSummaryResponse> projection = instructorProjectionService.findSummaryByInstructorId(instructorId);
+        if (projection.isPresent()) {
+            if (projection.get().status() == InstructorStatus.DEACTIVATED) {
+                throw new BusinessException(ErrorCode.AUTH_LOCKED_OR_INACTIVE);
+            }
+            return;
+        }
+
+        InstructorSummaryResponse reconciled = reconciliationService.reconcileOne(instructorId);
+        if (reconciled == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (reconciled.status() == InstructorStatus.DEACTIVATED) {
+            throw new BusinessException(ErrorCode.AUTH_LOCKED_OR_INACTIVE);
+        }
     }
 
     private Course findCourse(String id) {
@@ -269,6 +352,15 @@ public class CourseServiceImpl implements CourseService {
         }
     }
 
+    private void requireAuthenticatedRole(AuthContext authContext) {
+        if (authContext == null || authContext.role() == UserRole.UNKNOWN) {
+            throw new AccessDeniedException("Role required");
+        }
+        if (authContext.userId() == null || authContext.userId().isBlank()) {
+            throw new AccessDeniedException("Authenticated user required");
+        }
+    }
+
     private void requireAdminOrInstructor(AuthContext authContext) {
         if (authContext == null || authContext.role() == UserRole.UNKNOWN) {
             throw new AccessDeniedException("Role required");
@@ -296,5 +388,12 @@ public class CourseServiceImpl implements CourseService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private String buildPublicCourseImageUrl(String courseId) {
+        if (courseId == null || courseId.isBlank()) {
+            return null;
+        }
+        return PUBLIC_COURSE_IMAGE_PATH_TEMPLATE.formatted(courseId);
     }
 }

@@ -1,30 +1,38 @@
 spring:
+  application:
+    name: auth-service
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:local}
+    group:
+      dev: local
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.add.type.headers: false
-
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
 
 jwt:
-  expiration: 3h
-  refreshTokenExpiration: 6h
-  issuer: ${JWT_ISSUER:edubase-auth}
-  audience: ${JWT_AUDIENCE:api-gateway}
+  secret: ${JWT_SECRET}
+  expiration: 2h
+  refreshTokenExpiration: 4h
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
 
 app:
-  gateway-url: ${GATEWAY_URL:http://localhost:8090}
+  gateway-url: ${services.api-gateway.url}
   kafka:
     topics:
       user-registered: ${KAFKA_TOPIC_USER_REGISTERED:user.registered.v1}
   account-reactivation:
     token-expiration: 2h
-    activation-base-url: http://localhost:8080/api/v1/auth/reactivate-account
+    activation-base-url: ${AUTH_ACTIVATION_BASE_URL}

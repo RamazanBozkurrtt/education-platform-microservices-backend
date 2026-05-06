@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package edubase.search.v1;
+
+option java_package = "com.edubase.contracts.search.v1";
+option java_multiple_files = true;
+option java_outer_classname = "CourseSearchProto";
+
+service CourseSearchService {
+  rpc SearchCourses (CourseSearchRequest) returns (CourseSearchResponse);
+}
+
+message CourseSearchRequest {
+  string query = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+  string category_id = 4;
+  string instructor_id = 5;
+  double min_price = 6;
+  double max_price = 7;
+  double min_rating = 8;
+}
+
+message CourseSearchHit {
+  string course_id = 1;
+  string title = 2;
+  string description = 3;
+  string instructor_id = 4;
+  string category_id = 5;
+  double price = 6;
+  string status = 7;
+  repeated string tags = 8;
+  repeated string learning_outcomes = 9;
+  double average_rating = 10;
+  int64 rating_count = 11;
+  float score = 12;
+}
+
+message CourseSearchResponse {
+  repeated CourseSearchHit hits = 1;
+  int64 total_elements = 2;
+  int32 page_number = 3;
+  int32 page_size = 4;
+}

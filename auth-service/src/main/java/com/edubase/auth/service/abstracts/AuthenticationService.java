@@ -18,4 +18,5 @@ public interface AuthenticationService {
 
     public void deactivate(String email);
 
+    public void changePassword(String oldPassword, String newPassword, String authenticatedEmail);
 }

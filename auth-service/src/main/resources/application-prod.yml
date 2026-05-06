@@ -3,10 +3,21 @@ spring:
     url: ${AUTH_DB_URL}
     username: ${AUTH_DB_USERNAME}
     password: ${AUTH_DB_PASSWORD}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
   data:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
 
 jwt:
-  secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL}
+
+app:
+  account-reactivation:
+    activation-base-url: ${AUTH_ACTIVATION_BASE_URL}

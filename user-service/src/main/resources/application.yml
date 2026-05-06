@@ -6,17 +6,20 @@ spring:
     name: user-service
 
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:local}
+    group:
+      dev: local
 
   cache:
     type: redis
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
     consumer:
       group-id: ${KAFKA_GROUP_USER_SERVICE:user-service-group}
       auto-offset-reset: earliest
@@ -40,14 +43,27 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
-  issuer: ${JWT_ISSUER:edubase-auth}
-  audience: ${JWT_AUDIENCE:api-gateway}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
 
 app:
-  gateway-url: ${GATEWAY_URL:http://localhost:8090}
+  gateway-url: ${services.api-gateway.url}
   kafka:
     topics:
       user-registered: ${KAFKA_TOPIC_USER_REGISTERED:user.registered.v1}
+      instructor-lifecycle: ${KAFKA_TOPIC_INSTRUCTOR_LIFECYCLE:instructor.lifecycle.v1}
+  internal:
+    api-key: ${INTERNAL_API_KEY}
+
+user:
+  media:
+    avatar-base-path: ${USER_AVATAR_BASE_PATH:images/avatars}
+    minio:
+      endpoint: ${USER_MEDIA_MINIO_ENDPOINT}
+      access-key: ${USER_MEDIA_MINIO_ACCESS_KEY}
+      secret-key: ${USER_MEDIA_MINIO_SECRET_KEY}
+      bucket: ${USER_MEDIA_MINIO_BUCKET}
+      auto-create-bucket: ${USER_MEDIA_MINIO_AUTO_CREATE_BUCKET}
 
 auth:
   debug: ${AUTH_DEBUG:false}

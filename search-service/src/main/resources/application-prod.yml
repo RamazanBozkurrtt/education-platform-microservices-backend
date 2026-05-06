@@ -1,0 +1,20 @@
+server:
+  port: ${SEARCH_SERVICE_PORT}
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS}
+    username: ${ELASTICSEARCH_USERNAME}
+    password: ${ELASTICSEARCH_PASSWORD}
+
+grpc:
+  server:
+    port: ${SEARCH_GRPC_PORT}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

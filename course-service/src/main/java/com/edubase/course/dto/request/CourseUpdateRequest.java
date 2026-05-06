@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -29,4 +30,17 @@ public class CourseUpdateRequest {
 
     @Size(max = 100, message = "Category id must be at most 100 characters")
     private String categoryId;
+
+    @NotNull(message = "Learning outcomes are required")
+    @Size(min = 4, max = 4, message = "Learning outcomes must contain exactly 4 items")
+    private List<
+            @NotBlank(message = "Learning outcome cannot be blank")
+            @Size(max = 160, message = "Learning outcome must be at most 160 characters")
+                    String> learningOutcomes;
+
+    @Size(max = 20, message = "Tags must contain at most 20 items")
+    private List<
+            @NotBlank(message = "Tag cannot be blank")
+            @Size(max = 40, message = "Tag must be at most 40 characters")
+                    String> tags;
 }
