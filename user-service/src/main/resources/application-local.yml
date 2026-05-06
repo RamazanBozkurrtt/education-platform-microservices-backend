@@ -1,0 +1,53 @@
+server:
+  port: 8081
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: jdbc:postgresql://localhost:5433/edubase_user_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+services:
+  api-gateway:
+    url: http://localhost:8090
+
+app:
+  internal:
+    api-key: local-internal-api-key
+
+user:
+  media:
+    minio:
+      endpoint: http://localhost:9000
+      access-key: ${USER_MEDIA_MINIO_ACCESS_KEY:${MINIO_ROOT_USER:local-minio-access-key}}
+      secret-key: ${USER_MEDIA_MINIO_SECRET_KEY:${MINIO_ROOT_PASSWORD:local-minio-secret-key}}
+      bucket: ${USER_MEDIA_MINIO_BUCKET:edubase-media}
+      auto-create-bucket: ${USER_MEDIA_MINIO_AUTO_CREATE_BUCKET:true}
+
+grpc:
+  server:
+    port: 9091
+
+management:
+  endpoint:
+    health:
+      show-details: always

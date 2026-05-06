@@ -12,8 +12,8 @@ public class GrpcClientConfig {
 
     @Bean(destroyMethod = "shutdownNow")
     public ManagedChannel userServiceGrpcChannel(
-            @Value("${grpc.client.user.host:localhost}") String host,
-            @Value("${grpc.client.user.port:9091}") int port) {
+            @Value("${grpc.client.user.host}") String host,
+            @Value("${grpc.client.user.port}") int port) {
         return ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext()
                 .build();

@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class GrpcServerRunner {
 
-    @Value("${grpc.server.port:9092}")
+    @Value("${grpc.server.port}")
     private int grpcPort;
 
     private final CourseQueryGrpcService courseQueryGrpcService;

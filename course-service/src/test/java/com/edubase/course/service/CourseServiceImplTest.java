@@ -2,20 +2,24 @@ package com.edubase.course.service;
 
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
+import com.edubase.commonCore.events.InstructorStatus;
 import com.edubase.course.configuration.mapper.CourseMapper;
 import com.edubase.course.configuration.mapper.LessonMapper;
 import com.edubase.course.dto.request.CourseCreateRequest;
 import com.edubase.course.dto.request.CourseUpdateRequest;
 import com.edubase.course.dto.request.LessonCreateRequest;
 import com.edubase.course.dto.response.CourseResponse;
+import com.edubase.course.dto.response.InstructorSummaryResponse;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
-import com.edubase.course.grpc.UserGrpcClient;
+import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
 import com.edubase.course.service.concretes.CourseServiceImpl;
+import com.edubase.course.service.concretes.InstructorProjectionReconciliationService;
+import com.edubase.course.service.concretes.InstructorProjectionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -48,7 +52,13 @@ class CourseServiceImplTest {
     private LessonMapper lessonMapper;
 
     @Mock
-    private UserGrpcClient userGrpcClient;
+    private InstructorProjectionService instructorProjectionService;
+
+    @Mock
+    private InstructorProjectionReconciliationService reconciliationService;
+
+    @Mock
+    private CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
 
     @InjectMocks
     private CourseServiceImpl courseService;
@@ -89,7 +99,14 @@ class CourseServiceImplTest {
         when(courseRepository.findById("course-2")).thenReturn(Optional.of(course));
 
         AuthContext authContext = new AuthContext("1", UserRole.INSTRUCTOR);
-        CourseUpdateRequest request = new CourseUpdateRequest("New", "New desc", BigDecimal.ONE, "cat-1");
+        CourseUpdateRequest request = new CourseUpdateRequest(
+                "New",
+                "New desc",
+                BigDecimal.ONE,
+                "cat-1",
+                List.of("One", "Two", "Three", "Four"),
+                List.of("java")
+        );
 
         assertThrows(AccessDeniedException.class,
                 () -> courseService.updateCourse(authContext, "course-2", request));
@@ -98,13 +115,25 @@ class CourseServiceImplTest {
 
     @Test
     void createCourse_shouldSetInstructorAndDraftStatus() {
-        CourseCreateRequest request = new CourseCreateRequest("Title", "Desc", BigDecimal.ONE, "cat-1");
+        CourseCreateRequest request = new CourseCreateRequest(
+                "Title",
+                "Desc",
+                BigDecimal.ONE,
+                "cat-1",
+                List.of("One", "Two", "Three", "Four"),
+                List.of("backend")
+        );
         Course mapped = new Course();
         CourseResponse response = CourseResponse.builder().id("course-3").build();
 
         when(courseMapper.toEntityFromRequest(request)).thenReturn(mapped);
         when(courseRepository.save(mapped)).thenReturn(mapped);
         when(courseMapper.toResponseFromEntity(mapped)).thenReturn(response);
+        when(instructorProjectionService.findSummaryByInstructorId("42"))
+                .thenReturn(Optional.of(InstructorSummaryResponse.builder()
+                        .instructorId("42")
+                        .status(InstructorStatus.ACTIVE)
+                        .build()));
 
         AuthContext authContext = new AuthContext("42", UserRole.INSTRUCTOR);
         CourseResponse result = courseService.createCourse(authContext, request);
@@ -152,7 +181,7 @@ class CourseServiceImplTest {
                 .instructorId("5")
                 .lessons(new ArrayList<>())
                 .build();
-        LessonCreateRequest request = new LessonCreateRequest("Lesson", "https://video", 120, 0);
+        LessonCreateRequest request = new LessonCreateRequest("Lesson", "Lesson Intro", "https://video", 120, 0, false);
         Lesson lesson = new Lesson();
         CourseResponse response = CourseResponse.builder().id("course-5").build();
 

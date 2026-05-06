@@ -1,0 +1,65 @@
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5435/edubase_course_projection_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  cache:
+    type: simple
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/edubase_course_db
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+auth:
+  debug: ${AUTH_DEBUG:false}
+
+services:
+  api-gateway:
+    url: http://localhost:8090
+  user-service:
+    url: http://localhost:8081
+
+app:
+  internal:
+    api-key: local-internal-api-key
+
+grpc:
+  server:
+    port: 9093
+  client:
+    user:
+      host: localhost
+      port: 9091
+
+course:
+  media:
+    minio:
+      endpoint: http://localhost:9000
+      access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY:local-minio-access-key}
+      secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY:local-minio-secret-key}
+      bucket: ${COURSE_MEDIA_MINIO_BUCKET:edubase-media}
+      auto-create-bucket: ${COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

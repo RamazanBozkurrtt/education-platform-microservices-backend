@@ -15,8 +15,8 @@ public class GrpcClientConfig {
     @Bean(destroyMethod = "shutdownNow")
     @Qualifier("userServiceGrpcChannel")
     public ManagedChannel userServiceGrpcChannel(
-            @Value("${grpc.client.user.host:localhost}") String host,
-            @Value("${grpc.client.user.port:9091}") int port) {
+            @Value("${grpc.client.user.host}") String host,
+            @Value("${grpc.client.user.port}") int port) {
         return ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext()
                 .build();
@@ -25,8 +25,8 @@ public class GrpcClientConfig {
     @Bean(destroyMethod = "shutdownNow")
     @Qualifier("courseServiceGrpcChannel")
     public ManagedChannel courseServiceGrpcChannel(
-            @Value("${grpc.client.course.host:localhost}") String host,
-            @Value("${grpc.client.course.port:9092}") int port) {
+            @Value("${grpc.client.course.host}") String host,
+            @Value("${grpc.client.course.port}") int port) {
         return ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext()
                 .build();

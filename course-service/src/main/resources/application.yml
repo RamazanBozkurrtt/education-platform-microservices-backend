@@ -5,23 +5,69 @@ spring:
   application:
     name: course-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:local}
+    group:
+      dev: local
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: ${KAFKA_GROUP_COURSE_SERVICE:course-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.edubase.commonCore.events
+        spring.json.value.default.type: com.edubase.commonCore.events.InstructorLifecycleEvent
+        spring.json.use.type.headers: false
+    listener:
+      ack-mode: record
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
 jwt:
   secret: ${JWT_SECRET}
-  issuer: ${JWT_ISSUER:edubase-auth}
-  audience: ${JWT_AUDIENCE:api-gateway}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
 
 course:
   media:
     base-path: ${COURSE_MEDIA_BASE_PATH:videos}
+    image-base-path: ${COURSE_IMAGE_BASE_PATH:images/courses}
+    minio:
+      endpoint: ${COURSE_MEDIA_MINIO_ENDPOINT}
+      access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY}
+      secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY}
+      bucket: ${COURSE_MEDIA_MINIO_BUCKET}
+      auto-create-bucket: ${COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET}
   sample:
     enabled: ${COURSE_SAMPLE_ENABLED:true}
 
 grpc:
   server:
-    port: ${COURSE_GRPC_PORT:9092}
+    port: ${COURSE_GRPC_PORT:9093}
   client:
     user:
       host: ${USER_GRPC_HOST:localhost}
       port: ${USER_GRPC_PORT:9091}
+
+app:
+  gateway-url: ${services.api-gateway.url}
+  kafka:
+    topics:
+      instructor-lifecycle: ${KAFKA_TOPIC_INSTRUCTOR_LIFECYCLE:instructor.lifecycle.v1}
+      course-search-sync: ${KAFKA_TOPIC_COURSE_SEARCH_SYNC:course.search.sync.v1}
+  internal:
+    api-key: ${INTERNAL_API_KEY}
+    user-service-base-url: ${services.user-service.url}

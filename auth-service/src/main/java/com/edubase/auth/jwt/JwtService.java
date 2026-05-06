@@ -8,7 +8,6 @@ import com.edubase.auth.security.UserPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,7 +15,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,6 +28,8 @@ import java.util.function.Function;
 @Service
 @RequiredArgsConstructor
 public class JwtService {
+
+    private static final String USER_ID_CLAIM = "user_id";
 
     private final JwtProperties jwtProperties;
 
@@ -43,21 +46,26 @@ public class JwtService {
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("roles", user.getRoles().stream().map(Role::getName).toList());
+        claims.put(USER_ID_CLAIM, user.getId());
         var authorities = user.getRoles().stream()
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .toList();
-        return buildToken(claims, new UserPrincipal(user, authorities), String.valueOf(user.getId()), jwtProperties.getExpiration().toMillis());
+        return buildToken(claims, new UserPrincipal(user, authorities), UUID.randomUUID().toString(), jwtProperties.getExpiration().toMillis());
     }
 
     public String generateToken(
             Map<String, Object> extraClaims,
             UserDetails userDetails
     ) {
-        String tokenId = null;
-        if (userDetails instanceof UserPrincipal principal && principal.user() != null && principal.user().getId() != null) {
-            tokenId = String.valueOf(principal.user().getId());
+        String tokenId = UUID.randomUUID().toString();
+        Map<String, Object> claims = new HashMap<>();
+        if (extraClaims != null) {
+            claims.putAll(extraClaims);
         }
-        return buildToken(extraClaims, userDetails, tokenId, jwtProperties.getExpiration().toMillis());
+        if (userDetails instanceof UserPrincipal principal && principal.user() != null && principal.user().getId() != null) {
+            claims.putIfAbsent(USER_ID_CLAIM, principal.user().getId());
+        }
+        return buildToken(claims, userDetails, tokenId, jwtProperties.getExpiration().toMillis());
     }
 
     private String buildToken(
@@ -102,8 +110,13 @@ public class JwtService {
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .toList();
         Map<String, Object> extraClaims = new HashMap<>();
-        extraClaims.put("jti", UUID.randomUUID().toString());
-        String token = buildToken(extraClaims, new UserPrincipal(user, authorities), String.valueOf(user.getId()), jwtProperties.getRefreshTokenExpiration().toMillis());
+        String refreshTokenId = UUID.randomUUID().toString();
+        String token = buildToken(
+                extraClaims,
+                new UserPrincipal(user, authorities),
+                refreshTokenId,
+                jwtProperties.getRefreshTokenExpiration().toMillis()
+        );
         return RefreshToken.builder()
                 .refreshToken(token)
                 .revoked(false)
@@ -183,8 +196,35 @@ public class JwtService {
     }
 
     private SecretKey getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
-        return Keys.hmacShaKeyFor(keyBytes);
+        String secret = jwtProperties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT secret is missing.");
+        }
+
+        String trimmed = secret.trim();
+        byte[] rawBytes = trimmed.getBytes(StandardCharsets.UTF_8);
+
+        try {
+            byte[] decoded = Base64.getDecoder().decode(trimmed);
+            if (decoded.length >= 32) {
+                return Keys.hmacShaKeyFor(decoded);
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+
+        try {
+            byte[] decodedUrl = Base64.getUrlDecoder().decode(trimmed);
+            if (decodedUrl.length >= 32) {
+                return Keys.hmacShaKeyFor(decodedUrl);
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+
+        if (rawBytes.length < 32) {
+            throw new IllegalStateException("JWT secret must be at least 32 bytes (or base64/base64url value of 32+ bytes).");
+        }
+
+        return Keys.hmacShaKeyFor(rawBytes);
     }
 
 }

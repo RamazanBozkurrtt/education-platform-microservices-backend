@@ -1,0 +1,28 @@
+server:
+  port: 8090
+
+services:
+  auth-service:
+    url: http://auth-service:8080
+  user-service:
+    url: http://user-service:8081
+  course-service:
+    url: http://course-service:8083
+  enrollment-service:
+    url: http://enrollment-service:8084
+
+spring:
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,PATCH,OPTIONS}
+  allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With}
+  allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}

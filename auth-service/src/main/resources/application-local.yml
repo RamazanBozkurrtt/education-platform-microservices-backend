@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/auth_db
+    username: postgres
+    password: postgres
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+services:
+  api-gateway:
+    url: http://localhost:8090
+
+app:
+  account-reactivation:
+    activation-base-url: http://localhost:8080/api/v1/auth/reactivate-account

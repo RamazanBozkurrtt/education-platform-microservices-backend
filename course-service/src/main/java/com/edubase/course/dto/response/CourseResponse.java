@@ -17,12 +17,16 @@ import java.util.List;
 public class CourseResponse {
 
     private String id;
+    private String imageUrl;
     private String title;
     private String description;
     private BigDecimal price;
     private CourseStatus status;
     private String instructorId;
+    private InstructorSummaryResponse instructor;
     private String categoryId;
+    private List<String> learningOutcomes;
+    private List<String> tags;
     private Instant createdAt;
     private Instant updatedAt;
     private List<LessonResponse> lessons;

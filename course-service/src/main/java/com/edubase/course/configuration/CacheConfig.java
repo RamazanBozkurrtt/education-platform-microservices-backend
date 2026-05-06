@@ -1,5 +1,10 @@
 package com.edubase.course.configuration;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -21,11 +26,21 @@ public class CacheConfig {
     @Bean
     @ConditionalOnProperty(name = "spring.cache.type", havingValue = "redis")
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        ObjectMapper redisObjectMapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        redisObjectMapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+        );
+
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(DEFAULT_TTL)
                 .disableCachingNullValues()
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+                        .fromSerializer(new GenericJackson2JsonRedisSerializer(redisObjectMapper)));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)

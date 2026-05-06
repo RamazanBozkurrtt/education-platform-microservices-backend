@@ -40,8 +40,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashSet;
@@ -158,7 +158,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         var refreshToken = jwtService.generateRefreshToken(user);
         refreshTokenRepository.save(refreshToken);
         clearLoginFailures(email);
-        return AuthenticationResponse.forTokens(token, refreshToken.getRefreshToken());
+        return AuthenticationResponse.forTokens(
+                token,
+                refreshToken.getRefreshToken(),
+                user.getId(),
+                user.getEmail(),
+                user.getRoles().stream().map(Role::getName).sorted().toList()
+        );
     }
 
     @Override
@@ -228,6 +234,38 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         user.setUserStatus(UserStatus.DEACTIVATED);
         userRepository.save(user);
         refreshTokenRepository.deleteByUser(user);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String oldPassword, String newPassword, String authenticatedEmail) {
+        String email = normalizeEmail(authenticatedEmail);
+        if (email.isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        if (oldPassword == null || oldPassword.isBlank() || newPassword == null || newPassword.isBlank()) {
+            throw new BusinessException(ErrorCode.USER_PASSWORD_INVALID);
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getUserStatus() == UserStatus.DEACTIVATED) {
+            throw new BusinessException(ErrorCode.USER_ALREADY_DEACTIVATED);
+        }
+
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.USER_PASSWORD_INVALID);
+        }
+
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.USER_PASSWORD_INVALID);
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        revokeAllUserRefreshTokens(user);
     }
 
     private String createReactivationLink(User user) {

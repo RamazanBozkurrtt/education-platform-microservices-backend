@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class OpenApiConfig {
 
-    @Value("${app.gateway-url:http://localhost:8090}")
+    @Value("${app.gateway-url}")
     private String gatewayUrl;
 
     @Bean

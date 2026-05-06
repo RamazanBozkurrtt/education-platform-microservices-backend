@@ -19,6 +19,7 @@ public enum ErrorCode {
     USER_NOT_FOUND(2001, "Kullanıcı bulunamadı", 404),
     USER_ALREADY_EXISTS(2002, "Bu email zaten kullanımda", 400),
     USER_ALREADY_DEACTIVATED(2003,"Kullanıcı zaten deaktif durumda",400),
+    USER_PASSWORD_INVALID(2004,"Kullanıcı Şifresi Geçersiz",400),
 
     VALIDATION_ERROR(3001, "Hatalı değerler girildi", 400),
     // Course

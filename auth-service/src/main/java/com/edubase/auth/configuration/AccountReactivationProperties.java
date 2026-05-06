@@ -13,6 +13,6 @@ import java.time.Duration;
 @Setter
 public class AccountReactivationProperties {
 
-    private String activationBaseUrl = "http://localhost:8080/api/v1/auth/reactivate-account";
+    private String activationBaseUrl;
     private Duration tokenExpiration = Duration.ofHours(1);
 }

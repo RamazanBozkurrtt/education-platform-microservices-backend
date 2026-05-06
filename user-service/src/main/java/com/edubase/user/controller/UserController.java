@@ -18,10 +18,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 
 @RestController
@@ -94,6 +97,30 @@ public class UserController extends RestBaseController {
         return ok(userService.updateMe(extractAuthUserId(jwt), extractAuthEmail(jwt), userProfileRequest));
     }
 
+    @PutMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload my avatar", description = "Uploads current authenticated user's avatar image.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avatar uploaded successfully"),
+            @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "404", description = "User not found", content = @Content)
+    })
+    public ResponseEntity<RestResponse<UserProfileResponse>> uploadMyAvatar(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestPart("file") MultipartFile file) {
+        return ok(userService.uploadMyAvatar(extractAuthUserId(jwt), extractAuthEmail(jwt), file));
+    }
+
+    @GetMapping("/public/avatar/{profileId}")
+    @Operation(summary = "Get public avatar", description = "Returns profile avatar image for given profile id.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Avatar fetched successfully"),
+            @ApiResponse(responseCode = "404", description = "Avatar not found", content = @Content)
+    })
+    public ResponseEntity<Resource> getPublicAvatar(@PathVariable Long profileId) {
+        return userService.getPublicAvatar(profileId);
+    }
+
     @PostMapping
     @Operation(summary = "Create user profile", description = "Creates a new user profile.")
     @ApiResponses(value = {
@@ -118,12 +145,25 @@ public class UserController extends RestBaseController {
             throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
         }
 
+        Object userIdClaim = jwt.getClaim("user_id");
+        if (userIdClaim instanceof Number numberValue) {
+            return numberValue.longValue();
+        }
+        if (userIdClaim instanceof String stringValue && !stringValue.isBlank()) {
+            try {
+                return Long.parseLong(stringValue.trim());
+            } catch (NumberFormatException ignore) {
+                return null;
+            }
+        }
+
+        // Backward compatibility for legacy tokens where jti carried user id.
         String tokenId = jwt.getId();
         if (tokenId == null || tokenId.isBlank()) {
             return null;
         }
         try {
-            return Long.parseLong(tokenId);
+            return Long.parseLong(tokenId.trim());
         } catch (NumberFormatException ignore) {
             return null;
         }

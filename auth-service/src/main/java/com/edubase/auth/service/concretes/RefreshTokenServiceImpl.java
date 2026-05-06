@@ -34,7 +34,9 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     @Transactional
     public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
-        RefreshToken refreshToken = refreshTokenRepository.findByRefreshToken(request.getRefreshToken())
+        String providedToken = normalizeToken(request);
+
+        RefreshToken refreshToken = refreshTokenRepository.findByRefreshToken(providedToken)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE));
         if (refreshToken.isRevoked() || isRefreshTokenExpired(refreshToken.getExpiryDate())) {
             refreshTokenRepository.delete(refreshToken);
@@ -46,16 +48,44 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         RefreshToken newRefreshToken = jwtService.generateRefreshToken(user);
 
         refreshTokenRepository.delete(refreshToken);
+        refreshTokenRepository.flush();
         try {
-            refreshTokenRepository.save(newRefreshToken);
+            refreshTokenRepository.saveAndFlush(newRefreshToken);
         } catch (DataIntegrityViolationException ex) {
             throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_CONFLICT);
         }
 
-        return new AuthenticationResponse(token, newRefreshToken.getRefreshToken());
+        return AuthenticationResponse.forTokens(
+                token,
+                newRefreshToken.getRefreshToken(),
+                user.getId(),
+                user.getEmail(),
+                user.getRoles().stream().map(role -> role.getName()).sorted().toList()
+        );
     }
 
     private boolean isRefreshTokenExpired(Instant expiryDate) {
         return Instant.now().isAfter(expiryDate);
+    }
+
+    private String normalizeToken(RefreshTokenRequest request) {
+        if (request == null || request.getRefreshToken() == null) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+        }
+
+        String token = request.getRefreshToken().trim();
+        if (token.isEmpty()) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+        }
+
+        if (token.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            token = token.substring(7).trim();
+        }
+
+        if (token.isEmpty()) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+        }
+
+        return token;
     }
 }

@@ -21,6 +21,13 @@ public class CourseSecurity {
         return authContext.role() == UserRole.ADMIN || authContext.role() == UserRole.INSTRUCTOR;
     }
 
+    public boolean isAuthenticatedUser(AuthContext authContext) {
+        return authContext != null
+                && authContext.role() != UserRole.UNKNOWN
+                && authContext.userId() != null
+                && !authContext.userId().isBlank();
+    }
+
     public boolean canManageCourse(AuthContext authContext, String courseId) {
         if (authContext == null || courseId == null || courseId.isBlank()) {
             return false;

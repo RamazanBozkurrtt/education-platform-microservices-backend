@@ -25,6 +25,15 @@ public class AuthContextResolver {
     }
 
     private String extractUserId(Jwt jwt) {
+        Object userIdClaim = jwt.getClaim("user_id");
+        if (userIdClaim instanceof Number numberValue) {
+            return String.valueOf(numberValue.longValue());
+        }
+        if (userIdClaim instanceof String stringValue && !stringValue.isBlank()) {
+            return stringValue.trim();
+        }
+
+        // Backward compatibility for legacy tokens where jti carried user id.
         String tokenId = jwt.getId();
         if (tokenId == null || tokenId.isBlank()) {
             return null;

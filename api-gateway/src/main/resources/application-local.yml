@@ -1,18 +1,25 @@
-service:
-  auth:
-    url: ${AUTH_SERVICE_URL:http://localhost:8080}
-  user:
-    url: ${USER_SERVICE_URL:http://localhost:8081}
-  course:
-    url: ${COURSE_SERVICE_URL:http://localhost:8083}
-  enrollment:
-    url: ${ENROLLMENT_SERVICE_URL:http://localhost:8084}
+server:
+  port: 8090
+
+services:
+  auth-service:
+    url: http://localhost:8080
+  user-service:
+    url: http://localhost:8081
+  course-service:
+    url: http://localhost:8083
+  enrollment-service:
+    url: http://localhost:8084
 
 spring:
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: localhost
+      port: 6379
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}

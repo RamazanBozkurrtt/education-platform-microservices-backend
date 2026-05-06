@@ -33,6 +33,10 @@ public class UserProfile extends BaseEntity {
     private String biography;
     private String avatarUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserStatus status;
+
     @Type(JsonBinaryType.class)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> socialLinks; // LinkedIn, GitHub vb.

@@ -38,4 +38,10 @@ public class Course {
 
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();
+
+    @Builder.Default
+    private List<String> learningOutcomes = new ArrayList<>();
+
+    @Builder.Default
+    private List<String> tags = new ArrayList<>();
 }

@@ -34,9 +34,11 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
         Lesson lesson = Lesson.builder()
                 .id(SAMPLE_LESSON_ID)
                 .title("Ornek Ders 1")
+                .summaryTitle("Giris Ozeti")
                 .videoUrl("/courses/" + SAMPLE_COURSE_ID + "/lessons/" + SAMPLE_LESSON_ID + "/video.mp4")
                 .duration(120)
                 .orderIndex(1)
+                .completed(false)
                 .build();
 
         Course course = Course.builder()
@@ -46,6 +48,13 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
                 .price(BigDecimal.ZERO)
                 .status(CourseStatus.PUBLISHED)
                 .instructorId("sample")
+                .learningOutcomes(List.of(
+                        "Temel kavramlar",
+                        "Mimari akis",
+                        "Servis baglantilari",
+                        "Yayinlama adimlari"
+                ))
+                .tags(List.of("backend", "microservice"))
                 .lessons(List.of(lesson))
                 .build();
 

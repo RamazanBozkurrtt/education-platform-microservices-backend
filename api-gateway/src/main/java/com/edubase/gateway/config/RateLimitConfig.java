@@ -32,9 +32,17 @@ public class RateLimitConfig {
 
         return jwtDecoder.decode(token)
                 .map(jwt -> {
-                    String userId = jwt.getId();
-                    if (StringUtils.hasText(userId)) {
-                        return userId.trim();
+                    String userIdFromClaim = jwt.getClaimAsString("user_id");
+                    if (StringUtils.hasText(userIdFromClaim)) {
+                        return userIdFromClaim.trim();
+                    }
+
+                    if (StringUtils.hasText(jwt.getSubject())) {
+                        return jwt.getSubject().trim();
+                    }
+
+                    if (StringUtils.hasText(jwt.getId())) {
+                        return jwt.getId().trim();
                     }
                     return resolveClientIp(exchange);
                 })
