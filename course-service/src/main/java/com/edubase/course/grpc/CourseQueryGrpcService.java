@@ -23,7 +23,7 @@ public class CourseQueryGrpcService extends CourseQueryServiceGrpc.CourseQuerySe
         String courseId = request.getCourseId() == null ? "" : request.getCourseId().trim();
         Optional<Course> course = courseId.isBlank()
                 ? Optional.empty()
-                : courseRepository.findById(courseId);
+                : courseRepository.findByIdAndDeletedAtIsNull(courseId);
 
         CourseByIdResponse response = CourseByIdResponse.newBuilder()
                 .setCourseId(courseId)

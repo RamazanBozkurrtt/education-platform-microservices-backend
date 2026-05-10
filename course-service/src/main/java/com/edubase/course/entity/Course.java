@@ -36,6 +36,8 @@ public class Course {
     @LastModifiedDate
     private Instant updatedAt;
 
+    private Instant deletedAt;
+
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();
 

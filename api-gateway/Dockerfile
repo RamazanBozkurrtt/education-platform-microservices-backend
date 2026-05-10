@@ -12,6 +12,7 @@ COPY search-service/pom.xml search-service/
 COPY api-gateway/pom.xml api-gateway/
 COPY course-service/pom.xml course-service/
 COPY enrollment-service/pom.xml enrollment-service/
+COPY review-service/pom.xml review-service/
 
 RUN mvn -pl api-gateway -am dependency:go-offline
 

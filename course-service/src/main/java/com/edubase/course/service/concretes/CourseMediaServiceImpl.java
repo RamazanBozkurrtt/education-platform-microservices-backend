@@ -2,11 +2,16 @@ package com.edubase.course.service.concretes;
 
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
+import com.drew.imaging.mp4.Mp4MetadataReader;
+import com.drew.metadata.Metadata;
+import com.drew.metadata.mp4.Mp4Directory;
+import com.edubase.course.dto.response.VideoPlaybackUrlResponse;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
 import com.edubase.course.exception.CourseNotFoundException;
 import com.edubase.course.exception.LessonNotFoundException;
+import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
@@ -20,34 +25,48 @@ import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
 import io.minio.errors.ErrorResponseException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class CourseMediaServiceImpl implements CourseMediaService {
 
-    private static final long CHUNK_SIZE = 1024 * 1024;
     private static final String VIDEO_EXTENSION = "mp4";
     private static final String VIDEO_CONTENT_TYPE = "video/mp4";
     private static final String DEFAULT_COURSE_IMAGE_FILE = "default-course.png";
+    private static final String COURSE_VIDEO_OBJECT_KEY_TEMPLATE = "courses/%s/lessons/%s.%s";
+    private static final String LESSON_VIDEO_PUBLIC_PATH_TEMPLATE = "/courses/%s/lessons/%s/video";
+    private static final String LESSON_VIDEO_PUBLIC_SIGNED_PATH_TEMPLATE = "/courses/public/%s/lessons/%s/video";
+    private static final long MIN_PLAYBACK_URL_TTL_SECONDS = 60L;
+    private static final String HMAC_SHA256 = "HmacSHA256";
     private static final List<String> SUPPORTED_IMAGE_EXTENSIONS = List.of("png", "jpg", "jpeg", "webp", "svg");
     private static final Set<String> SUPPORTED_IMAGE_CONTENT_TYPES = Set.of(
             "image/png",
@@ -58,6 +77,7 @@ public class CourseMediaServiceImpl implements CourseMediaService {
 
     private final CourseRepository courseRepository;
     private final MinioClient minioClient;
+    private final CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
 
     @Value("${course.media.base-path:videos}")
     private String basePath;
@@ -71,27 +91,47 @@ public class CourseMediaServiceImpl implements CourseMediaService {
     @Value("${course.media.minio.auto-create-bucket:true}")
     private boolean autoCreateBucket;
 
+    @Value("${course.media.playback-signing-key:${jwt.secret}}")
+    private String playbackSigningKey;
+
+    @Value("${course.media.playback-url-ttl-seconds:900}")
+    private long playbackUrlTtlSeconds;
+
+    @Value("${app.gateway-url:http://localhost:8090}")
+    private String gatewayBaseUrl;
+
     @Override
-    public ResponseEntity<ResourceRegion> getLessonVideo(AuthContext authContext, String courseId, String lessonId, HttpHeaders headers) {
+    public ResponseEntity<Resource> getLessonVideo(AuthContext authContext, String courseId, String lessonId, HttpHeaders headers) {
         Course course = resolveCourseForAccess(authContext, courseId);
         Lesson lesson = resolveLesson(course, lessonId);
-        String objectKey = buildLessonVideoObjectKey(course.getId(), lesson.getId());
-        StoredObject storedObject = getStoredObjectOrThrow(objectKey, LessonNotFoundException::new);
+        return streamLessonVideo(course.getId(), lesson.getId(), headers);
+    }
 
-        List<HttpRange> ranges = headers.getRange();
-        ResourceRegion region = buildRegion(storedObject.resource(), storedObject.size(), ranges);
-        HttpStatus status = ranges.isEmpty() ? HttpStatus.OK : HttpStatus.PARTIAL_CONTENT;
-        MediaType mediaType = MediaTypeFactory.getMediaType(storedObject.resource()).orElse(MediaType.APPLICATION_OCTET_STREAM);
+    @Override
+    public ResponseEntity<Resource> getPublicLessonVideoBySignature(String courseId, String lessonId, long expiresAt, String signature, HttpHeaders headers) {
+        validatePlaybackSignature(courseId, lessonId, expiresAt, signature);
 
-        return ResponseEntity.status(status)
-                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                .contentType(mediaType)
-                .body(region);
+        Course course = courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
+        Lesson lesson = resolveLesson(course, lessonId);
+        return streamLessonVideo(course.getId(), lesson.getId(), headers);
+    }
+
+    @Override
+    public VideoPlaybackUrlResponse createLessonVideoPlaybackUrl(AuthContext authContext, String courseId, String lessonId) {
+        Course course = resolveCourseForAccess(authContext, courseId);
+        Lesson lesson = resolveLesson(course, lessonId);
+        long expiresAt = Instant.now().getEpochSecond() + effectivePlaybackUrlTtlSeconds();
+        String signature = signPlaybackUrl(course.getId(), lesson.getId(), expiresAt);
+
+        return VideoPlaybackUrlResponse.builder()
+                .url(buildSignedPlaybackUrl(course.getId(), lesson.getId(), expiresAt, signature))
+                .expiresAt(expiresAt)
+                .build();
     }
 
     @Override
     public ResponseEntity<Resource> getPublicCourseImage(String courseId) {
-        Course course = courseRepository.findByIdAndStatus(courseId, CourseStatus.PUBLISHED)
+        Course course = courseRepository.findByIdAndStatusAndDeletedAtIsNull(courseId, CourseStatus.PUBLISHED)
                 .orElseThrow(CourseNotFoundException::new);
         return buildImageResponse(course);
     }
@@ -127,22 +167,85 @@ public class CourseMediaServiceImpl implements CourseMediaService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
+    })
     public void uploadLessonVideo(AuthContext authContext, String courseId, String lessonId, MultipartFile file) {
         Course course = resolveCourseForManagement(authContext, courseId);
         Lesson lesson = resolveLesson(course, lessonId);
         validateVideoFile(file);
+        Integer durationSeconds = resolveVideoDurationSeconds(file);
 
         ensureBucketForWrites();
         putObject(buildLessonVideoObjectKey(course.getId(), lesson.getId()), file, VIDEO_CONTENT_TYPE);
+        lesson.setVideoUrl(buildLessonVideoPublicPath(course.getId(), lesson.getId()));
+        lesson.setVideoUpdatedAt(Instant.now());
+        if (durationSeconds != null && durationSeconds > 0) {
+            lesson.setDuration(durationSeconds);
+        }
+        course.setUpdatedAt(Instant.now());
+        Course saved = courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
+    })
     public void deleteLessonVideo(AuthContext authContext, String courseId, String lessonId) {
         Course course = resolveCourseForManagement(authContext, courseId);
         Lesson lesson = resolveLesson(course, lessonId);
 
-        ensureBucketForWrites();
-        removeObjectIfExists(buildLessonVideoObjectKey(course.getId(), lesson.getId()));
+        deleteLessonVideoAsset(course.getId(), lesson.getId());
+        lesson.setVideoUrl(null);
+        lesson.setVideoUpdatedAt(null);
+        lesson.setDuration(null);
+        course.setUpdatedAt(Instant.now());
+        Course saved = courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+    }
+
+    @Override
+    public void deleteCourseMediaAssets(Course course) {
+        if (course == null || course.getId() == null || course.getId().isBlank()) {
+            return;
+        }
+        for (String extension : SUPPORTED_IMAGE_EXTENSIONS) {
+            removeObjectIfExists(buildCourseImageObjectKey(course.getId(), extension));
+        }
+        List<Lesson> lessons = course.getLessons();
+        if (lessons == null || lessons.isEmpty()) {
+            return;
+        }
+        for (Lesson lesson : lessons) {
+            if (lesson != null && lesson.getId() != null && !lesson.getId().isBlank()) {
+                removeObjectIfExists(buildLessonVideoObjectKey(course.getId(), lesson.getId()));
+            }
+        }
+    }
+
+    @Override
+    public void deleteLessonVideoAsset(String courseId, String lessonId) {
+        if (courseId == null || courseId.isBlank() || lessonId == null || lessonId.isBlank()) {
+            return;
+        }
+        removeObjectIfExists(buildLessonVideoObjectKey(courseId, lessonId));
+    }
+
+    public Integer resolveVideoDurationSeconds(MultipartFile file) {
+        try (var inputStream = file.getInputStream()) {
+            Metadata metadata = Mp4MetadataReader.readMetadata(inputStream);
+            Integer durationSeconds = extractDurationSeconds(metadata);
+            if (durationSeconds != null && durationSeconds > 0) {
+                return durationSeconds;
+            }
+            return null;
+        } catch (Exception ex) {
+            log.warn("VIDEO_DURATION_PARSE_ERROR | msg={}", ex.getMessage());
+            return null;
+        }
     }
 
     private Course resolveCourseForAccess(AuthContext authContext, String courseId) {
@@ -152,18 +255,18 @@ public class CourseMediaServiceImpl implements CourseMediaService {
 
         UserRole role = authContext.role();
         if (role == UserRole.ADMIN) {
-            return courseRepository.findById(courseId).orElseThrow(CourseNotFoundException::new);
+            return courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
         }
 
         if (role == UserRole.INSTRUCTOR) {
-            boolean ownsCourse = courseRepository.existsByIdAndInstructorId(courseId, authContext.userId());
+            boolean ownsCourse = courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull(courseId, authContext.userId());
             if (!ownsCourse) {
                 throw new CourseNotFoundException();
             }
-            return courseRepository.findById(courseId).orElseThrow(CourseNotFoundException::new);
+            return courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
         }
 
-        return courseRepository.findByIdAndStatus(courseId, CourseStatus.PUBLISHED)
+        return courseRepository.findByIdAndStatusAndDeletedAtIsNull(courseId, CourseStatus.PUBLISHED)
                 .orElseThrow(CourseNotFoundException::new);
     }
 
@@ -173,18 +276,18 @@ public class CourseMediaServiceImpl implements CourseMediaService {
         }
 
         if (authContext.role() == UserRole.ADMIN) {
-            return courseRepository.findById(courseId).orElseThrow(CourseNotFoundException::new);
+            return courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
         }
 
         if (authContext.role() != UserRole.INSTRUCTOR) {
             throw new CourseNotFoundException();
         }
 
-        boolean ownsCourse = courseRepository.existsByIdAndInstructorId(courseId, authContext.userId());
+        boolean ownsCourse = courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull(courseId, authContext.userId());
         if (!ownsCourse) {
             throw new CourseNotFoundException();
         }
-        return courseRepository.findById(courseId).orElseThrow(CourseNotFoundException::new);
+        return courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
     }
 
     private Lesson resolveLesson(Course course, String lessonId) {
@@ -233,7 +336,8 @@ public class CourseMediaServiceImpl implements CourseMediaService {
         if (stat == null) {
             throw notFoundException.get();
         }
-        return toStoredObject(objectKey, stat);
+        Resource resource = new MinioObjectResource(minioClient, mediaBucket, objectKey, stat.size());
+        return new StoredObject(resource, stat.size(), objectKey);
     }
 
     private StoredObject findStoredObject(String objectKey) {
@@ -246,7 +350,7 @@ public class CourseMediaServiceImpl implements CourseMediaService {
 
     private StoredObject toStoredObject(String objectKey, StatObjectResponse statObjectResponse) {
         Resource resource = new MinioObjectResource(minioClient, mediaBucket, objectKey, statObjectResponse.size());
-        return new StoredObject(resource, statObjectResponse.size());
+        return new StoredObject(resource, statObjectResponse.size(), objectKey);
     }
 
     private StatObjectResponse statObjectOrNull(String objectKey) {
@@ -327,11 +431,15 @@ public class CourseMediaServiceImpl implements CourseMediaService {
 
     private String buildLessonVideoObjectKey(String courseId, String lessonId) {
         String videoBasePath = normalizePathPrefix(basePath);
-        String lessonPath = "courses/%s/lessons/%s.%s".formatted(courseId, lessonId, VIDEO_EXTENSION);
+        String lessonPath = COURSE_VIDEO_OBJECT_KEY_TEMPLATE.formatted(courseId, lessonId, VIDEO_EXTENSION);
         if (videoBasePath.isBlank()) {
             return lessonPath;
         }
         return "%s/%s".formatted(videoBasePath, lessonPath);
+    }
+
+    private String buildLessonVideoPublicPath(String courseId, String lessonId) {
+        return LESSON_VIDEO_PUBLIC_PATH_TEMPLATE.formatted(courseId, lessonId);
     }
 
     private String buildCourseImageObjectKey(String courseId, String extension) {
@@ -422,6 +530,91 @@ public class CourseMediaServiceImpl implements CourseMediaService {
         if (!VIDEO_CONTENT_TYPE.equals(contentType) && !VIDEO_EXTENSION.equals(extension)) {
             throw validationException();
         }
+
+        if (!hasMp4Signature(file)) {
+            throw validationException();
+        }
+    }
+
+    private boolean hasMp4Signature(MultipartFile file) {
+        try (var inputStream = file.getInputStream()) {
+            byte[] header = inputStream.readNBytes(12);
+            if (header.length < 8) {
+                return false;
+            }
+            return header[4] == 'f' && header[5] == 't' && header[6] == 'y' && header[7] == 'p';
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    private Integer extractDurationSeconds(Metadata metadata) {
+        Mp4Directory mp4Directory = metadata.getFirstDirectoryOfType(Mp4Directory.class);
+        if (mp4Directory != null) {
+            Long durationSeconds = mp4Directory.getLongObject(Mp4Directory.TAG_DURATION_SECONDS);
+            if (durationSeconds != null && durationSeconds > 0 && durationSeconds <= Integer.MAX_VALUE) {
+                return durationSeconds.intValue();
+            }
+            String durationDescription = mp4Directory.getDescription(Mp4Directory.TAG_DURATION);
+            if (durationDescription != null) {
+                Integer parsedDuration = parseDurationDescription(durationDescription);
+                if (parsedDuration != null && parsedDuration > 0) {
+                    return parsedDuration;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer parseDurationDescription(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (normalized.endsWith(" seconds")) {
+            normalized = normalized.substring(0, normalized.length() - " seconds".length()).trim();
+        } else if (normalized.endsWith(" second")) {
+            normalized = normalized.substring(0, normalized.length() - " second".length()).trim();
+        } else if (normalized.endsWith(" secs")) {
+            normalized = normalized.substring(0, normalized.length() - " secs".length()).trim();
+        } else if (normalized.endsWith(" sec")) {
+            normalized = normalized.substring(0, normalized.length() - " sec".length()).trim();
+        } else if (normalized.endsWith(" s")) {
+            normalized = normalized.substring(0, normalized.length() - " s".length()).trim();
+        }
+
+        try {
+            double numericSeconds = Double.parseDouble(normalized);
+            if (numericSeconds > 0 && numericSeconds <= Integer.MAX_VALUE) {
+                return (int) Math.round(numericSeconds);
+            }
+        } catch (NumberFormatException ignore) {
+            // Try HH:MM:SS parse below.
+        }
+
+        String[] parts = normalized.split(":");
+        if (parts.length < 2 || parts.length > 3) {
+            return null;
+        }
+
+        try {
+            long seconds = 0L;
+            for (String part : parts) {
+                String trimmedPart = part.trim();
+                long valuePart = Long.parseLong(trimmedPart);
+                if (valuePart < 0) {
+                    return null;
+                }
+                seconds = (seconds * 60) + valuePart;
+            }
+            if (seconds > 0 && seconds <= Integer.MAX_VALUE) {
+                return (int) seconds;
+            }
+            return null;
+        } catch (NumberFormatException ignore) {
+            return null;
+        }
     }
 
     private String extensionOf(String fileName) {
@@ -464,22 +657,108 @@ public class CourseMediaServiceImpl implements CourseMediaService {
     }
 
     private BusinessException storageException(Exception ex) {
-        return new BusinessException(ErrorCode.INTERNAL_ERROR);
+        return new BusinessException(ErrorCode.COURSE_MEDIA_STORAGE_ERROR, ex);
     }
 
-    private ResourceRegion buildRegion(Resource resource, long contentLength, List<HttpRange> ranges) {
-        if (ranges == null || ranges.isEmpty()) {
-            long length = Math.min(CHUNK_SIZE, contentLength);
-            return new ResourceRegion(resource, 0, length);
+    private ResponseEntity<Resource> streamLessonVideo(String courseId, String lessonId, HttpHeaders headers) {
+        String objectKey = buildLessonVideoObjectKey(courseId, lessonId);
+        StoredObject storedObject = getStoredObjectOrThrow(objectKey, LessonNotFoundException::new);
+        long objectSize = storedObject.size();
+        MediaType mediaType = MediaTypeFactory.getMediaType(storedObject.resource()).orElse(MediaType.APPLICATION_OCTET_STREAM);
+
+        Optional<HttpRange> firstRange = firstRange(headers);
+        if (firstRange.isEmpty()) {
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .contentType(mediaType)
+                    .contentLength(objectSize)
+                    .body(storedObject.resource());
         }
 
-        HttpRange range = ranges.get(0);
-        long start = range.getRangeStart(contentLength);
-        long end = range.getRangeEnd(contentLength);
-        long rangeLength = Math.min(CHUNK_SIZE, end - start + 1);
-        return new ResourceRegion(resource, start, rangeLength);
+        HttpRange range = firstRange.get();
+        long start;
+        long end;
+        try {
+            start = range.getRangeStart(objectSize);
+            end = range.getRangeEnd(objectSize);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */%d".formatted(objectSize))
+                    .build();
+        }
+
+        long length = (end - start) + 1;
+        Resource rangedResource = new MinioObjectResource(minioClient, mediaBucket, objectKey, length, start, length);
+
+        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .header(HttpHeaders.CONTENT_RANGE, "bytes %d-%d/%d".formatted(start, end, objectSize))
+                .contentLength(length)
+                .contentType(mediaType)
+                .body(rangedResource);
     }
 
-    private record StoredObject(Resource resource, long size) {
+    private Optional<HttpRange> firstRange(HttpHeaders headers) {
+        if (headers == null) {
+            return Optional.empty();
+        }
+        List<HttpRange> ranges = headers.getRange();
+        if (ranges == null || ranges.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(ranges.get(0));
+    }
+
+    private void validatePlaybackSignature(String courseId, String lessonId, long expiresAt, String signature) {
+        long now = Instant.now().getEpochSecond();
+        if (expiresAt <= now || signature == null || signature.isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String expected = signPlaybackUrl(courseId, lessonId, expiresAt);
+        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+    }
+
+    private String signPlaybackUrl(String courseId, String lessonId, long expiresAt) {
+        String payload = "%s|%s|%d".formatted(courseId, lessonId, expiresAt);
+        try {
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            SecretKeySpec key = new SecretKeySpec(playbackSigningKey.getBytes(StandardCharsets.UTF_8), HMAC_SHA256);
+            mac.init(key);
+            byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (Exception ex) {
+            throw storageException(ex);
+        }
+    }
+
+    private String buildSignedPlaybackUrl(String courseId, String lessonId, long expiresAt, String signature) {
+        String normalizedGatewayBaseUrl = normalizeGatewayBaseUrl(gatewayBaseUrl);
+        String path = LESSON_VIDEO_PUBLIC_SIGNED_PATH_TEMPLATE.formatted(courseId, lessonId);
+        return "%s%s?exp=%d&sig=%s".formatted(normalizedGatewayBaseUrl, path, expiresAt, signature);
+    }
+
+    private long effectivePlaybackUrlTtlSeconds() {
+        if (playbackUrlTtlSeconds < MIN_PLAYBACK_URL_TTL_SECONDS) {
+            return MIN_PLAYBACK_URL_TTL_SECONDS;
+        }
+        return playbackUrlTtlSeconds;
+    }
+
+    private String normalizeGatewayBaseUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return "http://localhost:8090";
+        }
+        String normalized = value.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private record StoredObject(Resource resource, long size, String objectKey) {
     }
 }

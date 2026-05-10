@@ -28,6 +28,7 @@ public class CourseCreateRequest {
     @PositiveOrZero(message = "Price must be zero or positive")
     private BigDecimal price;
 
+    @NotBlank(message = "Category id is required")
     @Size(max = 100, message = "Category id must be at most 100 characters")
     private String categoryId;
 

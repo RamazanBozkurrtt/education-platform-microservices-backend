@@ -53,8 +53,8 @@ course:
   media:
     minio:
       endpoint: http://localhost:9000
-      access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY:local-minio-access-key}
-      secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY:local-minio-secret-key}
+      access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY:${MINIO_ROOT_USER:edubaseminio}}
+      secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY:${MINIO_ROOT_PASSWORD:edubase-miniopass}}
       bucket: ${COURSE_MEDIA_MINIO_BUCKET:edubase-media}
       auto-create-bucket: ${COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET:true}
 

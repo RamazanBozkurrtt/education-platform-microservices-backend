@@ -93,4 +93,14 @@ public class AuthController extends RestBaseController {
         return ok("Sifre basariyla degistirildi.");
     }
 
+    @PostMapping("/me/roles/instructor")
+    @Operation(summary = "Become instructor", description = "Adds ROLE_INSTRUCTOR to current authenticated user and returns refreshed tokens.")
+    public ResponseEntity<RestResponse<AuthenticationResponse>> becomeInstructor(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        return ok(authenticationService.grantInstructorRoleForCurrentUser(principal.getUsername()));
+    }
+
 }

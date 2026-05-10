@@ -13,12 +13,20 @@ public class MinioObjectResource extends AbstractResource {
     private final String bucket;
     private final String objectKey;
     private final long contentLength;
+    private final long offset;
+    private final Long rangeLength;
 
     public MinioObjectResource(MinioClient minioClient, String bucket, String objectKey, long contentLength) {
+        this(minioClient, bucket, objectKey, contentLength, 0L, null);
+    }
+
+    public MinioObjectResource(MinioClient minioClient, String bucket, String objectKey, long contentLength, long offset, Long rangeLength) {
         this.minioClient = minioClient;
         this.bucket = bucket;
         this.objectKey = objectKey;
         this.contentLength = contentLength;
+        this.offset = Math.max(0L, offset);
+        this.rangeLength = rangeLength;
     }
 
     @Override
@@ -38,12 +46,16 @@ public class MinioObjectResource extends AbstractResource {
     @Override
     public InputStream getInputStream() throws IOException {
         try {
-            return minioClient.getObject(
-                    GetObjectArgs.builder()
-                            .bucket(bucket)
-                            .object(objectKey)
-                            .build()
-            );
+            GetObjectArgs.Builder builder = GetObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectKey);
+            if (offset > 0L) {
+                builder.offset(offset);
+            }
+            if (rangeLength != null && rangeLength > 0L) {
+                builder.length(rangeLength);
+            }
+            return minioClient.getObject(builder.build());
         } catch (Exception ex) {
             throw new IOException("Failed to read MinIO object: %s/%s".formatted(bucket, objectKey), ex);
         }

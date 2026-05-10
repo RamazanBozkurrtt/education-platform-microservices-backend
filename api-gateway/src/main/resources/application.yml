@@ -24,6 +24,7 @@ spring:
             allowedOrigins: ${cors.allowed-origins}
             allowedMethods: ${cors.allowed-methods}
             allowedHeaders: ${cors.allowed-headers}
+            exposedHeaders: ${cors.exposed-headers}
             allowCredentials: ${cors.allow-credentials}
       routes:
         - id: auth-service-route
@@ -42,6 +43,17 @@ spring:
           uri: ${services.user-service.url}
           predicates:
             - Path=/api/v1/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_USER_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_USER_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: instructor-service-route
+          uri: ${services.user-service.url}
+          predicates:
+            - Path=/api/v1/instructors/**
           filters:
             - name: RequestRateLimiter
               args:
@@ -82,6 +94,17 @@ spring:
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_ENROLLMENT_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ENROLLMENT_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
+        - id: review-service-route
+          uri: ${services.review-service.url}
+          predicates:
+            - Path=/api/v1/reviews/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REVIEW_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_REVIEW_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
         - id: auth-service-docs
           uri: ${services.auth-service.url}
           predicates:
@@ -104,6 +127,12 @@ spring:
           uri: ${services.enrollment-service.url}
           predicates:
             - Path=/v3/api-docs/enrollment
+          filters:
+            - SetPath=/v3/api-docs
+        - id: review-service-docs
+          uri: ${services.review-service.url}
+          predicates:
+            - Path=/v3/api-docs/review
           filters:
             - SetPath=/v3/api-docs
 
@@ -129,3 +158,5 @@ springdoc:
         url: /v3/api-docs/course
       - name: enrollment-service
         url: /v3/api-docs/enrollment
+      - name: review-service
+        url: /v3/api-docs/review

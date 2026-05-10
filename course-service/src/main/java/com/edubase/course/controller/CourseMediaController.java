@@ -1,11 +1,11 @@
 package com.edubase.course.controller;
 
+import com.edubase.course.dto.response.VideoPlaybackUrlResponse;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.AuthContextResolver;
 import com.edubase.course.service.abstracts.CourseMediaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,13 +23,32 @@ public class CourseMediaController {
     private final AuthContextResolver authContextResolver;
 
     @GetMapping(value = "/{courseId}/lessons/{lessonId}/video", produces = "video/mp4")
-    public ResponseEntity<ResourceRegion> getLessonVideo(
+    public ResponseEntity<Resource> getLessonVideo(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String courseId,
             @PathVariable String lessonId,
             @RequestHeader HttpHeaders headers) {
         AuthContext authContext = authContextResolver.requireAuth(jwt);
         return courseMediaService.getLessonVideo(authContext, courseId, lessonId, headers);
+    }
+
+    @GetMapping(value = "/public/{courseId}/lessons/{lessonId}/video", produces = "video/mp4")
+    public ResponseEntity<Resource> getPublicLessonVideoBySignature(
+            @PathVariable String courseId,
+            @PathVariable String lessonId,
+            @RequestParam("exp") long expiresAt,
+            @RequestParam("sig") String signature,
+            @RequestHeader HttpHeaders headers) {
+        return courseMediaService.getPublicLessonVideoBySignature(courseId, lessonId, expiresAt, signature, headers);
+    }
+
+    @PostMapping("/{courseId}/lessons/{lessonId}/video/playback-url")
+    public ResponseEntity<VideoPlaybackUrlResponse> createLessonVideoPlaybackUrl(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String courseId,
+            @PathVariable String lessonId) {
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ResponseEntity.ok(courseMediaService.createLessonVideoPlaybackUrl(authContext, courseId, lessonId));
     }
 
     @GetMapping("/public/{courseId}/image")

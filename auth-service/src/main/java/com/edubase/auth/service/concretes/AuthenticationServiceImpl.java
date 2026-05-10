@@ -92,7 +92,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .build();
         var userDB = userRepository.save(user);
         applicationEventPublisher.publishEvent(new UserRegisteredDomainEvent(userDB.getId(), userDB.getEmail()));
-        return userMapper.toResponseFromEntity(userDB);
+        UserResponse response = userMapper.toResponseFromEntity(userDB);
+        response.setRoles(userDB.getRoles().stream().map(Role::getName).sorted().toList());
+        return response;
     }
 
     public void revokeAllUserRefreshTokens(User user) {
@@ -266,6 +268,38 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         revokeAllUserRefreshTokens(user);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse grantInstructorRoleForCurrentUser(String authenticatedEmail) {
+        String email = normalizeEmail(authenticatedEmail);
+        if (email.isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Role instructorRole = roleRepository.findByName("ROLE_INSTRUCTOR")
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_NOT_FOUND));
+
+        user.getRoles().add(instructorRole);
+        userRepository.save(user);
+
+        revokeAllUserRefreshTokens(user);
+
+        String accessToken = jwtService.generateToken(user);
+        var refreshToken = jwtService.generateRefreshToken(user);
+        refreshTokenRepository.save(refreshToken);
+
+        return AuthenticationResponse.forTokens(
+                accessToken,
+                refreshToken.getRefreshToken(),
+                user.getId(),
+                user.getEmail(),
+                user.getRoles().stream().map(Role::getName).sorted().toList()
+        );
     }
 
     private String createReactivationLink(User user) {

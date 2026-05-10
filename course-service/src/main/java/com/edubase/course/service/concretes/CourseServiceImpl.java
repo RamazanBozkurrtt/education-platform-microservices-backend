@@ -9,19 +9,24 @@ import com.edubase.course.dto.request.CourseCreateRequest;
 import com.edubase.course.dto.request.CourseUpdateRequest;
 import com.edubase.course.dto.request.LessonCreateRequest;
 import com.edubase.course.dto.request.LessonUpdateRequest;
+import com.edubase.course.dto.response.CategoryResponse;
 import com.edubase.course.dto.response.CourseResponse;
 import com.edubase.course.dto.response.CustomPageResponse;
 import com.edubase.course.dto.response.InstructorSummaryResponse;
+import com.edubase.course.entity.Category;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
+import com.edubase.course.exception.CourseCategoryNotFoundException;
 import com.edubase.course.exception.CourseNotFoundException;
 import com.edubase.course.exception.LessonNotFoundException;
 import com.edubase.course.exception.PublishValidationException;
 import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
+import com.edubase.course.repository.CategoryRepository;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
+import com.edubase.course.service.abstracts.CourseMediaService;
 import com.edubase.course.service.abstracts.CourseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -42,6 +47,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,9 +57,11 @@ public class CourseServiceImpl implements CourseService {
 
     private static final String PUBLIC_COURSE_IMAGE_PATH_TEMPLATE = "/courses/public/%s/image";
 
+    private final CategoryRepository categoryRepository;
     private final CourseRepository courseRepository;
     private final CourseMapper courseMapper;
     private final LessonMapper lessonMapper;
+    private final CourseMediaService courseMediaService;
     private final InstructorProjectionService instructorProjectionService;
     private final InstructorProjectionReconciliationService reconciliationService;
     private final CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
@@ -69,8 +77,10 @@ public class CourseServiceImpl implements CourseService {
         if (authContext.role() == UserRole.INSTRUCTOR) {
             validateInstructorForCourseCreation(authContext.userId());
         }
+        validateCategoryExists(request.getCategoryId());
 
         Course course = courseMapper.toEntityFromRequest(request);
+        course.setCategoryId(request.getCategoryId().trim());
         course.setInstructorId(authContext.userId());
         course.setStatus(CourseStatus.DRAFT);
         course.setLessons(new ArrayList<>());
@@ -107,7 +117,7 @@ public class CourseServiceImpl implements CourseService {
     public CustomPageResponse<CourseResponse> getCourses(AuthContext authContext, int pageNumber, int pageSize) {
         requireAdmin(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Course> page = courseRepository.findAll(pageRequest);
+        Page<Course> page = courseRepository.findAllByDeletedAtIsNull(pageRequest);
         List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
                 .toList());
@@ -118,7 +128,7 @@ public class CourseServiceImpl implements CourseService {
     @Cacheable(cacheNames = "coursesPublicPaged", key = "T(String).valueOf(#pageNumber).concat(':').concat(T(String).valueOf(#pageSize))")
     public CustomPageResponse<CourseResponse> getPublicCourses(int pageNumber, int pageSize) {
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Course> page = courseRepository.findAllByStatus(CourseStatus.PUBLISHED, pageRequest);
+        Page<Course> page = courseRepository.findAllByStatusAndDeletedAtIsNull(CourseStatus.PUBLISHED, pageRequest);
         List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
                 .toList());
@@ -130,7 +140,7 @@ public class CourseServiceImpl implements CourseService {
     public CustomPageResponse<CourseResponse> getMyCourses(AuthContext authContext, int pageNumber, int pageSize) {
         requireAuthenticatedRole(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Course> page = courseRepository.findAllByInstructorId(authContext.userId(), pageRequest);
+        Page<Course> page = courseRepository.findAllByInstructorIdAndDeletedAtIsNull(authContext.userId(), pageRequest);
         List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
                 .toList());
@@ -146,8 +156,10 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse updateCourse(AuthContext authContext, String id, CourseUpdateRequest request) {
         Course course = findCourse(id);
         requireAdminOrInstructor(authContext, course);
+        validateCategoryExists(request.getCategoryId());
 
         courseMapper.updateCourseFromRequest(request, course);
+        course.setCategoryId(request.getCategoryId().trim());
 
         Course saved = courseRepository.save(course);
         courseSearchSyncKafkaPublisher.publishUpsert(saved);
@@ -155,17 +167,19 @@ public class CourseServiceImpl implements CourseService {
     }
 
     @Override
-    @PreAuthorize("@courseSecurity.isAdmin(#p0)")
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
             @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
             @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public void deleteCourse(AuthContext authContext, String id) {
-        requireAdmin(authContext);
-
         Course course = findCourse(id);
-        courseSearchSyncKafkaPublisher.publishDelete(course);
-        courseRepository.delete(course);
+        requireAdminOrInstructor(authContext, course);
+        Instant now = Instant.now();
+        course.setDeletedAt(now);
+        course.setUpdatedAt(now);
+        Course saved = courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishDelete(saved);
     }
 
     @Override
@@ -217,9 +231,11 @@ public class CourseServiceImpl implements CourseService {
     public void deleteLesson(AuthContext authContext, String courseId, String lessonId) {
         Course course = findCourse(courseId);
         requireAdminOrInstructor(authContext, course);
+        Lesson lesson = findLesson(course, lessonId);
+        courseMediaService.deleteLessonVideoAsset(course.getId(), lesson.getId());
 
         List<Lesson> lessons = ensureLessons(course);
-        boolean removed = lessons.removeIf(lesson -> lessonId.equals(lesson.getId()));
+        boolean removed = lessons.removeIf(item -> lessonId.equals(item.getId()));
         if (!removed) {
             throw new LessonNotFoundException();
         }
@@ -249,11 +265,32 @@ public class CourseServiceImpl implements CourseService {
         return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
     }
 
+    @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
+    })
+    public CourseResponse unpublishCourse(AuthContext authContext, String id) {
+        Course course = findCourse(id);
+        requireAdminOrInstructor(authContext, course);
+        course.setStatus(CourseStatus.DRAFT);
+
+        Course saved = courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
+    }
+
     private CourseResponse enrichCourseResponse(CourseResponse response) {
         if (response == null) {
             return response;
         }
         response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
+        if (hasText(response.getCategoryId())) {
+            categoryRepository.findById(response.getCategoryId())
+                    .map(this::toCategoryResponse)
+                    .ifPresent(response::setCategory);
+        }
         if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
             return response;
         }
@@ -267,6 +304,12 @@ public class CourseServiceImpl implements CourseService {
         if (responses == null || responses.isEmpty()) {
             return responses;
         }
+        HashSet<String> categoryIds = responses.stream()
+                .map(CourseResponse::getCategoryId)
+                .filter(this::hasText)
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<String, CategoryResponse> categoriesById = findCategoriesByIds(categoryIds);
+
         HashSet<String> instructorIds = responses.stream()
                 .map(CourseResponse::getInstructorId)
                 .filter(value -> value != null && !value.isBlank())
@@ -275,6 +318,10 @@ public class CourseServiceImpl implements CourseService {
                 instructorProjectionService.findSummariesByInstructorIds(instructorIds);
 
         for (CourseResponse response : responses) {
+            response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
+            if (hasText(response.getCategoryId())) {
+                response.setCategory(categoriesById.get(response.getCategoryId()));
+            }
             if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
                 continue;
             }
@@ -314,11 +361,11 @@ public class CourseServiceImpl implements CourseService {
     }
 
     private Course findCourse(String id) {
-        return courseRepository.findById(id).orElseThrow(CourseNotFoundException::new);
+        return courseRepository.findByIdAndDeletedAtIsNull(id).orElseThrow(CourseNotFoundException::new);
     }
 
     private Course findPublishedCourse(String id) {
-        return courseRepository.findByIdAndStatus(id, CourseStatus.PUBLISHED)
+        return courseRepository.findByIdAndStatusAndDeletedAtIsNull(id, CourseStatus.PUBLISHED)
                 .orElseThrow(CourseNotFoundException::new);
     }
 
@@ -343,7 +390,31 @@ public class CourseServiceImpl implements CourseService {
         if (course.getPrice() == null || course.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             return false;
         }
+        if (!hasText(course.getCategoryId())) {
+            return false;
+        }
         return course.getLessons() != null && !course.getLessons().isEmpty();
+    }
+
+    private void validateCategoryExists(String categoryId) {
+        if (!hasText(categoryId) || !categoryRepository.existsById(categoryId.trim())) {
+            throw new CourseCategoryNotFoundException();
+        }
+    }
+
+    private Map<String, CategoryResponse> findCategoriesByIds(Set<String> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return Map.of();
+        }
+        return categoryRepository.findAllById(categoryIds).stream()
+                .collect(Collectors.toMap(Category::getId, this::toCategoryResponse));
+    }
+
+    private CategoryResponse toCategoryResponse(Category category) {
+        return CategoryResponse.builder()
+                .id(category.getId())
+                .categoryName(category.getCategoryName())
+                .build();
     }
 
     private void requireAdmin(AuthContext authContext) {

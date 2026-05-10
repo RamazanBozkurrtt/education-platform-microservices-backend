@@ -14,9 +14,11 @@ import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
 import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
+import com.edubase.course.repository.CategoryRepository;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
+import com.edubase.course.service.abstracts.CourseMediaService;
 import com.edubase.course.service.concretes.CourseServiceImpl;
 import com.edubase.course.service.concretes.InstructorProjectionReconciliationService;
 import com.edubase.course.service.concretes.InstructorProjectionService;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,10 +49,16 @@ class CourseServiceImplTest {
     private CourseRepository courseRepository;
 
     @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
     private CourseMapper courseMapper;
 
     @Mock
     private LessonMapper lessonMapper;
+
+    @Mock
+    private CourseMediaService courseMediaService;
 
     @Mock
     private InstructorProjectionService instructorProjectionService;
@@ -74,7 +83,7 @@ class CourseServiceImplTest {
                 .lessons(new ArrayList<>())
                 .build();
 
-        when(courseRepository.findById("course-1")).thenReturn(Optional.of(course));
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-1")).thenReturn(Optional.of(course));
 
         AuthContext authContext = new AuthContext("1", UserRole.ADMIN);
         BusinessException ex = assertThrows(BusinessException.class,
@@ -96,7 +105,7 @@ class CourseServiceImplTest {
                 .lessons(new ArrayList<>())
                 .build();
 
-        when(courseRepository.findById("course-2")).thenReturn(Optional.of(course));
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-2")).thenReturn(Optional.of(course));
 
         AuthContext authContext = new AuthContext("1", UserRole.INSTRUCTOR);
         CourseUpdateRequest request = new CourseUpdateRequest(
@@ -127,6 +136,7 @@ class CourseServiceImplTest {
         CourseResponse response = CourseResponse.builder().id("course-3").build();
 
         when(courseMapper.toEntityFromRequest(request)).thenReturn(mapped);
+        when(categoryRepository.existsById("cat-1")).thenReturn(true);
         when(courseRepository.save(mapped)).thenReturn(mapped);
         when(courseMapper.toResponseFromEntity(mapped)).thenReturn(response);
         when(instructorProjectionService.findSummaryByInstructorId("42"))
@@ -147,19 +157,47 @@ class CourseServiceImplTest {
     }
 
     @Test
+    void createCourse_shouldThrowWhenCategoryDoesNotExist() {
+        CourseCreateRequest request = new CourseCreateRequest(
+                "Title",
+                "Desc",
+                BigDecimal.ONE,
+                "missing-category",
+                List.of("One", "Two", "Three", "Four"),
+                List.of("backend")
+        );
+
+        when(categoryRepository.existsById("missing-category")).thenReturn(false);
+        when(instructorProjectionService.findSummaryByInstructorId("42"))
+                .thenReturn(Optional.of(InstructorSummaryResponse.builder()
+                        .instructorId("42")
+                        .status(InstructorStatus.ACTIVE)
+                        .build()));
+
+        AuthContext authContext = new AuthContext("42", UserRole.INSTRUCTOR);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> courseService.createCourse(authContext, request));
+
+        assertEquals(ErrorCode.COURSE_CATEGORY_NOT_FOUND, ex.getErrorCode());
+        verify(courseRepository, never()).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
+
+    @Test
     void publishCourse_shouldPublish_whenValid() {
         Course course = Course.builder()
                 .id("course-4")
                 .title("Title")
                 .description("Desc")
                 .price(BigDecimal.ONE)
+                .categoryId("cat-1")
                 .status(CourseStatus.DRAFT)
                 .instructorId("7")
                 .lessons(new ArrayList<>(List.of(Lesson.builder().id("l1").title("L1").orderIndex(1).build())))
                 .build();
         CourseResponse response = CourseResponse.builder().status(CourseStatus.PUBLISHED).build();
 
-        when(courseRepository.findById("course-4")).thenReturn(Optional.of(course));
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-4")).thenReturn(Optional.of(course));
         when(courseRepository.save(course)).thenReturn(course);
         when(courseMapper.toResponseFromEntity(course)).thenReturn(response);
 
@@ -168,6 +206,31 @@ class CourseServiceImplTest {
 
         assertEquals(CourseStatus.PUBLISHED, course.getStatus());
         assertEquals(CourseStatus.PUBLISHED, result.getStatus());
+    }
+
+    @Test
+    void unpublishCourse_shouldMoveToDraft() {
+        Course course = Course.builder()
+                .id("course-4")
+                .title("Title")
+                .description("Desc")
+                .price(BigDecimal.ONE)
+                .status(CourseStatus.PUBLISHED)
+                .instructorId("7")
+                .lessons(new ArrayList<>(List.of(Lesson.builder().id("l1").title("L1").orderIndex(1).build())))
+                .build();
+        CourseResponse response = CourseResponse.builder().status(CourseStatus.DRAFT).build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-4")).thenReturn(Optional.of(course));
+        when(courseRepository.save(course)).thenReturn(course);
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(response);
+
+        AuthContext authContext = new AuthContext("7", UserRole.INSTRUCTOR);
+        CourseResponse result = courseService.unpublishCourse(authContext, "course-4");
+
+        assertEquals(CourseStatus.DRAFT, course.getStatus());
+        assertEquals(CourseStatus.DRAFT, result.getStatus());
+        verify(courseSearchSyncKafkaPublisher, times(1)).publishUpsert(course);
     }
 
     @Test
@@ -185,7 +248,7 @@ class CourseServiceImplTest {
         Lesson lesson = new Lesson();
         CourseResponse response = CourseResponse.builder().id("course-5").build();
 
-        when(courseRepository.findById("course-5")).thenReturn(Optional.of(course));
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-5")).thenReturn(Optional.of(course));
         when(lessonMapper.toEntityFromRequest(request)).thenReturn(lesson);
         when(courseRepository.save(course)).thenReturn(course);
         when(courseMapper.toResponseFromEntity(course)).thenReturn(response);
@@ -196,5 +259,44 @@ class CourseServiceImplTest {
         assertEquals("course-5", result.getId());
         assertEquals(1, course.getLessons().size());
         assertNotNull(course.getLessons().get(0).getId());
+    }
+
+    @Test
+    void deleteCourse_shouldSoftDeleteCourse() {
+        Course course = Course.builder()
+                .id("course-6")
+                .instructorId("admin-1")
+                .lessons(new ArrayList<>())
+                .build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-6")).thenReturn(Optional.of(course));
+        when(courseRepository.save(course)).thenReturn(course);
+
+        AuthContext authContext = new AuthContext("admin-1", UserRole.ADMIN);
+        courseService.deleteCourse(authContext, "course-6");
+
+        verify(courseSearchSyncKafkaPublisher, times(1)).publishDelete(course);
+        verify(courseRepository, times(1)).save(course);
+        assertNotNull(course.getDeletedAt());
+    }
+
+    @Test
+    void deleteLesson_shouldCleanupLessonVideoBeforeRemovingLesson() {
+        Lesson lesson = Lesson.builder().id("lesson-6").build();
+        Course course = Course.builder()
+                .id("course-7")
+                .instructorId("inst-7")
+                .lessons(new ArrayList<>(List.of(lesson)))
+                .build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-7")).thenReturn(Optional.of(course));
+        when(courseRepository.save(course)).thenReturn(course);
+
+        AuthContext authContext = new AuthContext("inst-7", UserRole.INSTRUCTOR);
+        courseService.deleteLesson(authContext, "course-7", "lesson-6");
+
+        verify(courseMediaService, times(1)).deleteLessonVideoAsset("course-7", "lesson-6");
+        verify(courseRepository, times(1)).save(course);
+        verify(courseSearchSyncKafkaPublisher, times(1)).publishUpsert(course);
     }
 }

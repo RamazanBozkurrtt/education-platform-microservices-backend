@@ -38,6 +38,6 @@ public class CourseSecurity {
         if (authContext.role() != UserRole.INSTRUCTOR) {
             return false;
         }
-        return courseRepository.existsByIdAndInstructorId(courseId, authContext.userId());
+        return courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull(courseId, authContext.userId());
     }
 }

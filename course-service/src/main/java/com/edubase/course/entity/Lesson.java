@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,6 +17,7 @@ public class Lesson {
     private String title;
     private String summaryTitle;
     private String videoUrl;
+    private Instant videoUpdatedAt;
     private Integer duration;
     private Integer orderIndex;
     private boolean completed;

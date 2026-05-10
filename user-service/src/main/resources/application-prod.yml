@@ -28,6 +28,8 @@ jwt:
 services:
   api-gateway:
     url: ${API_GATEWAY_URL}
+  auth-service:
+    url: ${AUTH_SERVICE_URL}
 
 user:
   media:

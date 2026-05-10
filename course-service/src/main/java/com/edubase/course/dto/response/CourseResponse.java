@@ -25,6 +25,7 @@ public class CourseResponse {
     private String instructorId;
     private InstructorSummaryResponse instructor;
     private String categoryId;
+    private CategoryResponse category;
     private List<String> learningOutcomes;
     private List<String> tags;
     private Instant createdAt;
