@@ -48,6 +48,9 @@ grpc:
     course:
       host: ${COURSE_GRPC_HOST:localhost}
       port: ${COURSE_GRPC_PORT:9093}
+    payment:
+      host: ${PAYMENT_GRPC_HOST:localhost}
+      port: ${PAYMENT_GRPC_PORT:9095}
 
 management:
   endpoints:

@@ -1,6 +1,7 @@
 package com.edubase.enrollment.configuration.grpc;
 
 import com.edubase.contracts.course.v1.CourseQueryServiceGrpc;
+import com.edubase.contracts.payment.v1.PaymentQueryServiceGrpc;
 import com.edubase.contracts.user.v1.UserQueryServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -32,6 +33,16 @@ public class GrpcClientConfig {
                 .build();
     }
 
+    @Bean(destroyMethod = "shutdownNow")
+    @Qualifier("paymentServiceGrpcChannel")
+    public ManagedChannel paymentServiceGrpcChannel(
+            @Value("${grpc.client.payment.host}") String host,
+            @Value("${grpc.client.payment.port}") int port) {
+        return ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext()
+                .build();
+    }
+
     @Bean
     public UserQueryServiceGrpc.UserQueryServiceBlockingStub userQueryServiceBlockingStub(
             @Qualifier("userServiceGrpcChannel") ManagedChannel channel) {
@@ -42,5 +53,11 @@ public class GrpcClientConfig {
     public CourseQueryServiceGrpc.CourseQueryServiceBlockingStub courseQueryServiceBlockingStub(
             @Qualifier("courseServiceGrpcChannel") ManagedChannel channel) {
         return CourseQueryServiceGrpc.newBlockingStub(channel);
+    }
+
+    @Bean
+    public PaymentQueryServiceGrpc.PaymentQueryServiceBlockingStub paymentQueryServiceBlockingStub(
+            @Qualifier("paymentServiceGrpcChannel") ManagedChannel channel) {
+        return PaymentQueryServiceGrpc.newBlockingStub(channel);
     }
 }

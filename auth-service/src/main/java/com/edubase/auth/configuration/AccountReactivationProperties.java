@@ -13,6 +13,5 @@ import java.time.Duration;
 @Setter
 public class AccountReactivationProperties {
 
-    private String activationBaseUrl;
     private Duration tokenExpiration = Duration.ofHours(1);
 }

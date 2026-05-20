@@ -36,3 +36,6 @@ grpc:
     course:
       host: course-service
       port: 9092
+    payment:
+      host: payment-service
+      port: 9095

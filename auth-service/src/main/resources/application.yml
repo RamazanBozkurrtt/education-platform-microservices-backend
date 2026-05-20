@@ -30,9 +30,14 @@ jwt:
 
 app:
   gateway-url: ${services.api-gateway.url}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  password-reset:
+    token-expiration: ${PASSWORD_RESET_TOKEN_EXPIRATION:15m}
+  gmail:
+    keys-file: ${GMAIL_KEYS_FILE:keys.json}
   kafka:
     topics:
       user-registered: ${KAFKA_TOPIC_USER_REGISTERED:user.registered.v1}
   account-reactivation:
     token-expiration: 2h
-    activation-base-url: ${AUTH_ACTIVATION_BASE_URL}

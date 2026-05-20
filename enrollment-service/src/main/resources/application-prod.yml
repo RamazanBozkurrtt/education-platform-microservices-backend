@@ -37,6 +37,9 @@ grpc:
     course:
       host: ${COURSE_GRPC_HOST}
       port: ${COURSE_GRPC_PORT}
+    payment:
+      host: ${PAYMENT_GRPC_HOST}
+      port: ${PAYMENT_GRPC_PORT}
 
 management:
   endpoint:

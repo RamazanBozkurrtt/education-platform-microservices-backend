@@ -36,6 +36,9 @@ grpc:
     course:
       host: localhost
       port: 9093
+    payment:
+      host: localhost
+      port: 9095
 
 management:
   endpoint:

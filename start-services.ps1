@@ -6,6 +6,7 @@ $services = @(
   "user-service",
   "course-service",
   "enrollment-service",
+  "payment-service",
   "search-service",
   "api-gateway"
 )
