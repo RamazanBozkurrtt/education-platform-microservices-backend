@@ -1,7 +1,9 @@
 package com.edubase.course.configuration;
 
 import com.edubase.course.entity.Category;
+import com.edubase.course.entity.CourseLevel;
 import com.edubase.course.repository.CategoryRepository;
+import com.edubase.course.repository.CourseLevelRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -27,7 +29,14 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
             "Pazarlama ve Buyume"
     );
 
+    private static final List<SampleCourseLevel> SAMPLE_LEVELS = List.of(
+            new SampleCourseLevel("Baslangic", 1),
+            new SampleCourseLevel("Orta", 2),
+            new SampleCourseLevel("Ileri", 3)
+    );
+
     private final CategoryRepository categoryRepository;
+    private final CourseLevelRepository courseLevelRepository;
 
     @Value("${course.sample.enabled:true}")
     private boolean enabled;
@@ -43,5 +52,20 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
                 categoryRepository.save(new Category(null, categoryName, null, null));
             }
         }
+
+        for (SampleCourseLevel courseLevel : SAMPLE_LEVELS) {
+            if (!courseLevelRepository.existsByLevelName(courseLevel.levelName())) {
+                courseLevelRepository.save(new CourseLevel(
+                        null,
+                        courseLevel.levelName(),
+                        courseLevel.displayOrder(),
+                        null,
+                        null
+                ));
+            }
+        }
+    }
+
+    private record SampleCourseLevel(String levelName, int displayOrder) {
     }
 }

@@ -51,7 +51,7 @@ curl -X PUT "http://localhost:8090/api/v1/courses/{courseId}/lessons/{lessonId}/
 }
 ```
 
-Not: Kurs create/update requestindeki `categoryId` degeri, bu endpointten donen `id` olmalidir.
+Not: Kurs create/update requestindeki `categoryIds` elemanlari, bu endpointten donen `id` degerlerinden secilmelidir.
 
 ---
 
@@ -68,7 +68,7 @@ Not: Kurs create/update requestindeki `categoryId` degeri, bu endpointten donen 
   "title": "Java Backend Masterclass",
   "description": "Comprehensive backend training",
   "price": 1499.00,
-  "categoryId": "backend",
+  "categoryIds": ["681f7f2f1e4db80aaf9fa9f1", "681f7f2f1e4db80aaf9fa9f2"],
   "learningOutcomes": [
     "Outcome 1",
     "Outcome 2",
@@ -148,5 +148,5 @@ Not: `PUT` tam guncelleme oldugu icin gerekli alanlari eksiksiz gonderin.
 
 1. Video upload basarili olduktan sonra ilgili kursu `GET /api/v1/courses/{id}` ile yeniden fetch edin.
 2. `lessonId` olarak `orderIndex` degil, lesson nesnesinin gercek `id` alanini kullanin.
-3. `PUT` endpointlerinde zorunlu alanlari eksik gondermeyin.
+3. `PUT` endpointlerinde zorunlu alanlari eksik gondermeyin (`categoryIds` en az 1 eleman olmali).
 4. Silme isleminden sonra local state'i optimistic degilse sunucudan yeniden senkronlayin.

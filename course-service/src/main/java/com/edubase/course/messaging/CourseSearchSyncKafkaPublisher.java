@@ -47,7 +47,8 @@ public class CourseSearchSyncKafkaPublisher {
                 course.getTitle(),
                 course.getDescription(),
                 course.getInstructorId(),
-                course.getCategoryId(),
+                resolvePrimaryCategoryId(course),
+                normalizeCategoryIds(course),
                 course.getPrice(),
                 course.getStatus() == null ? "" : course.getStatus().name(),
                 safeList(course.getTags()),
@@ -82,5 +83,34 @@ public class CourseSearchSyncKafkaPublisher {
 
     private List<String> safeList(List<String> source) {
         return source == null ? List.of() : source.stream().filter(value -> value != null && !value.isBlank()).toList();
+    }
+
+    @SuppressWarnings("deprecation")
+    private String resolvePrimaryCategoryId(Course course) {
+        List<String> categoryIds = normalizeCategoryIds(course);
+        if (!categoryIds.isEmpty()) {
+            return categoryIds.get(0);
+        }
+        String legacy = course.getCategoryId();
+        if (legacy == null || legacy.isBlank()) {
+            return null;
+        }
+        return legacy.trim();
+    }
+
+    @SuppressWarnings("deprecation")
+    private List<String> normalizeCategoryIds(Course course) {
+        if (course == null) {
+            return List.of();
+        }
+        List<String> current = safeList(course.getCategoryIds());
+        if (!current.isEmpty()) {
+            return current;
+        }
+        String legacy = course.getCategoryId();
+        if (legacy == null || legacy.isBlank()) {
+            return List.of();
+        }
+        return List.of(legacy.trim());
     }
 }

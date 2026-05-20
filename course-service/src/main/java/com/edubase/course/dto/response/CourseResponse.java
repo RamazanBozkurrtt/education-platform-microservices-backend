@@ -24,8 +24,20 @@ public class CourseResponse {
     private CourseStatus status;
     private String instructorId;
     private InstructorSummaryResponse instructor;
+
+    /**
+     * Primary category id for backward compatibility with existing clients.
+     */
     private String categoryId;
+
+    /**
+     * Primary category detail for backward compatibility with existing clients.
+     */
     private CategoryResponse category;
+    private String levelId;
+    private CourseLevelResponse level;
+    private List<String> categoryIds;
+    private List<CategoryResponse> categories;
     private List<String> learningOutcomes;
     private List<String> tags;
     private Instant createdAt;

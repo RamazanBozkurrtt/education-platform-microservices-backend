@@ -28,9 +28,16 @@ public class CourseCreateRequest {
     @PositiveOrZero(message = "Price must be zero or positive")
     private BigDecimal price;
 
-    @NotBlank(message = "Category id is required")
-    @Size(max = 100, message = "Category id must be at most 100 characters")
-    private String categoryId;
+    @NotBlank(message = "Level id is required")
+    @Size(max = 100, message = "Level id must be at most 100 characters")
+    private String levelId;
+
+    @NotNull(message = "Category ids are required")
+    @Size(min = 1, max = 5, message = "Category ids must contain between 1 and 5 items")
+    private List<
+            @NotBlank(message = "Category id cannot be blank")
+            @Size(max = 100, message = "Category id must be at most 100 characters")
+                    String> categoryIds;
 
     @NotNull(message = "Learning outcomes are required")
     @Size(min = 4, max = 4, message = "Learning outcomes must contain exactly 4 items")

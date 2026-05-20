@@ -9,12 +9,15 @@ import com.edubase.course.dto.request.CourseCreateRequest;
 import com.edubase.course.dto.request.CourseUpdateRequest;
 import com.edubase.course.dto.request.LessonCreateRequest;
 import com.edubase.course.dto.response.CourseResponse;
+import com.edubase.course.dto.response.CustomPageResponse;
 import com.edubase.course.dto.response.InstructorSummaryResponse;
+import com.edubase.course.entity.Category;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
 import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
 import com.edubase.course.repository.CategoryRepository;
+import com.edubase.course.repository.CourseLevelRepository;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
@@ -27,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
@@ -36,6 +40,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -50,6 +55,9 @@ class CourseServiceImplTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private CourseLevelRepository courseLevelRepository;
 
     @Mock
     private CourseMapper courseMapper;
@@ -112,7 +120,8 @@ class CourseServiceImplTest {
                 "New",
                 "New desc",
                 BigDecimal.ONE,
-                "cat-1",
+                "level-1",
+                List.of("cat-1"),
                 List.of("One", "Two", "Three", "Four"),
                 List.of("java")
         );
@@ -128,7 +137,8 @@ class CourseServiceImplTest {
                 "Title",
                 "Desc",
                 BigDecimal.ONE,
-                "cat-1",
+                "level-1",
+                List.of("cat-1"),
                 List.of("One", "Two", "Three", "Four"),
                 List.of("backend")
         );
@@ -136,7 +146,9 @@ class CourseServiceImplTest {
         CourseResponse response = CourseResponse.builder().id("course-3").build();
 
         when(courseMapper.toEntityFromRequest(request)).thenReturn(mapped);
-        when(categoryRepository.existsById("cat-1")).thenReturn(true);
+        when(courseLevelRepository.existsById("level-1")).thenReturn(true);
+        when(categoryRepository.findAllById(List.of("cat-1")))
+                .thenReturn(List.of(new Category("cat-1", "Category", null, null)));
         when(courseRepository.save(mapped)).thenReturn(mapped);
         when(courseMapper.toResponseFromEntity(mapped)).thenReturn(response);
         when(instructorProjectionService.findSummaryByInstructorId("42"))
@@ -150,6 +162,7 @@ class CourseServiceImplTest {
 
         assertEquals("course-3", result.getId());
         assertEquals("42", mapped.getInstructorId());
+        assertEquals("level-1", mapped.getLevelId());
         assertEquals(CourseStatus.DRAFT, mapped.getStatus());
         assertNotNull(mapped.getCreatedAt());
         assertNotNull(mapped.getUpdatedAt());
@@ -162,12 +175,14 @@ class CourseServiceImplTest {
                 "Title",
                 "Desc",
                 BigDecimal.ONE,
-                "missing-category",
+                "level-1",
+                List.of("missing-category"),
                 List.of("One", "Two", "Three", "Four"),
                 List.of("backend")
         );
 
-        when(categoryRepository.existsById("missing-category")).thenReturn(false);
+        when(courseLevelRepository.existsById("level-1")).thenReturn(true);
+        when(categoryRepository.findAllById(List.of("missing-category"))).thenReturn(List.of());
         when(instructorProjectionService.findSummaryByInstructorId("42"))
                 .thenReturn(Optional.of(InstructorSummaryResponse.builder()
                         .instructorId("42")
@@ -184,13 +199,43 @@ class CourseServiceImplTest {
     }
 
     @Test
+    void createCourse_shouldThrowWhenLevelDoesNotExist() {
+        CourseCreateRequest request = new CourseCreateRequest(
+                "Title",
+                "Desc",
+                BigDecimal.ONE,
+                "missing-level",
+                List.of("cat-1"),
+                List.of("One", "Two", "Three", "Four"),
+                List.of("backend")
+        );
+
+        when(courseLevelRepository.existsById("missing-level")).thenReturn(false);
+        when(instructorProjectionService.findSummaryByInstructorId("42"))
+                .thenReturn(Optional.of(InstructorSummaryResponse.builder()
+                        .instructorId("42")
+                        .status(InstructorStatus.ACTIVE)
+                        .build()));
+
+        AuthContext authContext = new AuthContext("42", UserRole.INSTRUCTOR);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> courseService.createCourse(authContext, request));
+
+        assertEquals(ErrorCode.COURSE_LEVEL_NOT_FOUND, ex.getErrorCode());
+        verify(categoryRepository, never()).findAllById(org.mockito.ArgumentMatchers.anyIterable());
+        verify(courseRepository, never()).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
+
+    @Test
     void publishCourse_shouldPublish_whenValid() {
         Course course = Course.builder()
                 .id("course-4")
                 .title("Title")
                 .description("Desc")
                 .price(BigDecimal.ONE)
-                .categoryId("cat-1")
+                .levelId("level-1")
+                .categoryIds(List.of("cat-1"))
                 .status(CourseStatus.DRAFT)
                 .instructorId("7")
                 .lessons(new ArrayList<>(List.of(Lesson.builder().id("l1").title("L1").orderIndex(1).build())))
@@ -298,5 +343,38 @@ class CourseServiceImplTest {
         verify(courseMediaService, times(1)).deleteLessonVideoAsset("course-7", "lesson-6");
         verify(courseRepository, times(1)).save(course);
         verify(courseSearchSyncKafkaPublisher, times(1)).publishUpsert(course);
+    }
+
+    @Test
+    void getPublicCourses_shouldHandleMissingLevelId() {
+        Course course = Course.builder()
+                .id("course-8")
+                .status(CourseStatus.PUBLISHED)
+                .instructorId("inst-8")
+                .categoryIds(List.of("cat-1"))
+                .lessons(new ArrayList<>())
+                .build();
+        CourseResponse mapped = CourseResponse.builder()
+                .id("course-8")
+                .instructorId("inst-8")
+                .categoryIds(List.of("cat-1"))
+                .build();
+
+        when(courseRepository.findAllByStatusAndDeletedAtIsNull(
+                org.mockito.ArgumentMatchers.eq(CourseStatus.PUBLISHED),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new PageImpl<>(List.of(course)));
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(mapped);
+        when(categoryRepository.findAllById(List.of("cat-1")))
+                .thenReturn(List.of(new Category("cat-1", "Category", null, null)));
+        when(instructorProjectionService.findSummariesByInstructorIds(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of());
+
+        CustomPageResponse<CourseResponse> result = courseService.getPublicCourses(0, 50);
+
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals("course-8", result.getContent().get(0).getId());
+        assertNull(result.getContent().get(0).getLevel());
     }
 }

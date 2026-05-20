@@ -18,6 +18,7 @@ import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,7 +48,9 @@ public class CourseSearchService {
         target.setTitle(normalize(event.title()));
         target.setDescription(normalize(event.description()));
         target.setInstructorId(normalize(event.instructorId()));
-        target.setCategoryId(normalize(event.categoryId()));
+        List<String> normalizedCategoryIds = normalizeCategoryIds(event.categoryIds(), event.categoryId());
+        target.setCategoryIds(normalizedCategoryIds);
+        target.setCategoryId(resolvePrimaryCategoryId(normalizedCategoryIds));
         target.setPrice(event.price() == null ? null : event.price().doubleValue());
         target.setStatus(normalize(event.status()));
         target.setTags(safeList(event.tags()));
@@ -115,7 +118,10 @@ public class CourseSearchService {
             criteria = criteria.and(textCriteria);
         }
         if (!isBlank(categoryId)) {
-            criteria = criteria.and("categoryId").is(categoryId.trim());
+            String normalizedCategoryId = categoryId.trim();
+            Criteria categoryCriteria = new Criteria("categoryIds").is(normalizedCategoryId)
+                    .or("categoryId").is(normalizedCategoryId);
+            criteria = criteria.and(categoryCriteria);
         }
         if (!isBlank(instructorId)) {
             criteria = criteria.and("instructorId").is(instructorId.trim());
@@ -150,6 +156,7 @@ public class CourseSearchService {
                 content.getDescription(),
                 content.getInstructorId(),
                 content.getCategoryId(),
+                normalizeCategoryIds(content.getCategoryIds(), content.getCategoryId()),
                 content.getPrice(),
                 content.getStatus(),
                 safeList(content.getTags()),
@@ -186,6 +193,30 @@ public class CourseSearchService {
         return source.stream()
                 .filter(item -> item != null && !item.isBlank())
                 .toList();
+    }
+
+    private List<String> normalizeCategoryIds(List<String> categoryIds, String fallbackCategoryId) {
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (categoryIds != null) {
+            categoryIds.stream()
+                    .map(this::normalize)
+                    .filter(item -> item != null && !item.isBlank())
+                    .forEach(normalized::add);
+        }
+        if (normalized.isEmpty()) {
+            String fallback = normalize(fallbackCategoryId);
+            if (fallback != null) {
+                normalized.add(fallback);
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    private String resolvePrimaryCategoryId(List<String> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return null;
+        }
+        return categoryIds.get(0);
     }
 
     private boolean isBlank(String value) {

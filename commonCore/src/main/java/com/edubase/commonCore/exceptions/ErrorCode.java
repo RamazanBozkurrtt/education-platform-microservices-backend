@@ -29,6 +29,7 @@ public enum ErrorCode {
     COURSE_LESSON_NOT_FOUND(7003, "Lesson not found", 404),
     COURSE_MEDIA_STORAGE_ERROR(7004, "Medya depolama hatasi olustu", 500),
     COURSE_CATEGORY_NOT_FOUND(7005, "Course category not found", 404),
+    COURSE_LEVEL_NOT_FOUND(7006, "Course level not found", 404),
     ENROLLMENT_NOT_FOUND(8001, "Enrollment not found", 404),
     ENROLLMENT_ALREADY_EXISTS(8002, "Enrollment already exists", 409),
     REVIEW_NOT_FOUND(9001, "Review not found", 404),
