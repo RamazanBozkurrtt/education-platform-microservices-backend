@@ -35,6 +35,10 @@ public class CourseSearchDocument {
     @Field(type = FieldType.Keyword)
     private String categoryId;
 
+    @Builder.Default
+    @Field(type = FieldType.Keyword)
+    private List<String> categoryIds = new ArrayList<>();
+
     @Field(type = FieldType.Double)
     private Double price;
 

@@ -9,19 +9,28 @@ import com.edubase.course.dto.request.CourseCreateRequest;
 import com.edubase.course.dto.request.CourseUpdateRequest;
 import com.edubase.course.dto.request.LessonCreateRequest;
 import com.edubase.course.dto.request.LessonUpdateRequest;
+import com.edubase.course.dto.response.CategoryResponse;
+import com.edubase.course.dto.response.CourseLevelResponse;
 import com.edubase.course.dto.response.CourseResponse;
 import com.edubase.course.dto.response.CustomPageResponse;
 import com.edubase.course.dto.response.InstructorSummaryResponse;
+import com.edubase.course.entity.Category;
 import com.edubase.course.entity.Course;
+import com.edubase.course.entity.CourseLevel;
 import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
+import com.edubase.course.exception.CourseCategoryNotFoundException;
+import com.edubase.course.exception.CourseLevelNotFoundException;
 import com.edubase.course.exception.CourseNotFoundException;
 import com.edubase.course.exception.LessonNotFoundException;
 import com.edubase.course.exception.PublishValidationException;
 import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
+import com.edubase.course.repository.CategoryRepository;
+import com.edubase.course.repository.CourseLevelRepository;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
+import com.edubase.course.service.abstracts.CourseMediaService;
 import com.edubase.course.service.abstracts.CourseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -39,9 +48,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,9 +62,12 @@ public class CourseServiceImpl implements CourseService {
 
     private static final String PUBLIC_COURSE_IMAGE_PATH_TEMPLATE = "/courses/public/%s/image";
 
+    private final CategoryRepository categoryRepository;
+    private final CourseLevelRepository courseLevelRepository;
     private final CourseRepository courseRepository;
     private final CourseMapper courseMapper;
     private final LessonMapper lessonMapper;
+    private final CourseMediaService courseMediaService;
     private final InstructorProjectionService instructorProjectionService;
     private final InstructorProjectionReconciliationService reconciliationService;
     private final CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
@@ -69,8 +83,13 @@ public class CourseServiceImpl implements CourseService {
         if (authContext.role() == UserRole.INSTRUCTOR) {
             validateInstructorForCourseCreation(authContext.userId());
         }
+        String normalizedLevelId = normalizeAndValidateLevelId(request.getLevelId());
+        List<String> normalizedCategoryIds = normalizeAndValidateCategoryIds(request.getCategoryIds());
 
         Course course = courseMapper.toEntityFromRequest(request);
+        course.setLevelId(normalizedLevelId);
+        course.setCategoryIds(normalizedCategoryIds);
+        course.setCategoryId(resolvePrimaryCategoryId(normalizedCategoryIds));
         course.setInstructorId(authContext.userId());
         course.setStatus(CourseStatus.DRAFT);
         course.setLessons(new ArrayList<>());
@@ -107,7 +126,7 @@ public class CourseServiceImpl implements CourseService {
     public CustomPageResponse<CourseResponse> getCourses(AuthContext authContext, int pageNumber, int pageSize) {
         requireAdmin(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Course> page = courseRepository.findAll(pageRequest);
+        Page<Course> page = courseRepository.findAllByDeletedAtIsNull(pageRequest);
         List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
                 .toList());
@@ -118,7 +137,7 @@ public class CourseServiceImpl implements CourseService {
     @Cacheable(cacheNames = "coursesPublicPaged", key = "T(String).valueOf(#pageNumber).concat(':').concat(T(String).valueOf(#pageSize))")
     public CustomPageResponse<CourseResponse> getPublicCourses(int pageNumber, int pageSize) {
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Course> page = courseRepository.findAllByStatus(CourseStatus.PUBLISHED, pageRequest);
+        Page<Course> page = courseRepository.findAllByStatusAndDeletedAtIsNull(CourseStatus.PUBLISHED, pageRequest);
         List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
                 .toList());
@@ -130,7 +149,7 @@ public class CourseServiceImpl implements CourseService {
     public CustomPageResponse<CourseResponse> getMyCourses(AuthContext authContext, int pageNumber, int pageSize) {
         requireAuthenticatedRole(authContext);
         PageRequest pageRequest = PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Course> page = courseRepository.findAllByInstructorId(authContext.userId(), pageRequest);
+        Page<Course> page = courseRepository.findAllByInstructorIdAndDeletedAtIsNull(authContext.userId(), pageRequest);
         List<CourseResponse> responses = enrichCourseResponses(page.getContent().stream()
                 .map(courseMapper::toResponseFromEntity)
                 .toList());
@@ -146,8 +165,13 @@ public class CourseServiceImpl implements CourseService {
     public CourseResponse updateCourse(AuthContext authContext, String id, CourseUpdateRequest request) {
         Course course = findCourse(id);
         requireAdminOrInstructor(authContext, course);
+        String normalizedLevelId = normalizeAndValidateLevelId(request.getLevelId());
+        List<String> normalizedCategoryIds = normalizeAndValidateCategoryIds(request.getCategoryIds());
 
         courseMapper.updateCourseFromRequest(request, course);
+        course.setLevelId(normalizedLevelId);
+        course.setCategoryIds(normalizedCategoryIds);
+        course.setCategoryId(resolvePrimaryCategoryId(normalizedCategoryIds));
 
         Course saved = courseRepository.save(course);
         courseSearchSyncKafkaPublisher.publishUpsert(saved);
@@ -155,17 +179,19 @@ public class CourseServiceImpl implements CourseService {
     }
 
     @Override
-    @PreAuthorize("@courseSecurity.isAdmin(#p0)")
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
     @Caching(evict = {
             @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
             @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
     })
     public void deleteCourse(AuthContext authContext, String id) {
-        requireAdmin(authContext);
-
         Course course = findCourse(id);
-        courseSearchSyncKafkaPublisher.publishDelete(course);
-        courseRepository.delete(course);
+        requireAdminOrInstructor(authContext, course);
+        Instant now = Instant.now();
+        course.setDeletedAt(now);
+        course.setUpdatedAt(now);
+        Course saved = courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishDelete(saved);
     }
 
     @Override
@@ -217,9 +243,11 @@ public class CourseServiceImpl implements CourseService {
     public void deleteLesson(AuthContext authContext, String courseId, String lessonId) {
         Course course = findCourse(courseId);
         requireAdminOrInstructor(authContext, course);
+        Lesson lesson = findLesson(course, lessonId);
+        courseMediaService.deleteLessonVideoAsset(course.getId(), lesson.getId());
 
         List<Lesson> lessons = ensureLessons(course);
-        boolean removed = lessons.removeIf(lesson -> lessonId.equals(lesson.getId()));
+        boolean removed = lessons.removeIf(item -> lessonId.equals(item.getId()));
         if (!removed) {
             throw new LessonNotFoundException();
         }
@@ -249,11 +277,38 @@ public class CourseServiceImpl implements CourseService {
         return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
     }
 
+    @Override
+    @PreAuthorize("@courseSecurity.canManageCourse(#p0, #p1)")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "coursesPublicById", allEntries = true),
+            @CacheEvict(cacheNames = "coursesPublicPaged", allEntries = true)
+    })
+    public CourseResponse unpublishCourse(AuthContext authContext, String id) {
+        Course course = findCourse(id);
+        requireAdminOrInstructor(authContext, course);
+        course.setStatus(CourseStatus.DRAFT);
+
+        Course saved = courseRepository.save(course);
+        courseSearchSyncKafkaPublisher.publishUpsert(saved);
+        return enrichCourseResponse(courseMapper.toResponseFromEntity(saved));
+    }
+
     private CourseResponse enrichCourseResponse(CourseResponse response) {
         if (response == null) {
             return response;
         }
         response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
+        List<String> normalizedCategoryIds = normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId());
+        response.setCategoryIds(normalizedCategoryIds);
+        Map<String, CategoryResponse> categoriesById = findCategoriesByIds(new HashSet<>(normalizedCategoryIds));
+        List<CategoryResponse> categories = normalizedCategoryIds.stream()
+                .map(categoriesById::get)
+                .filter(item -> item != null)
+                .toList();
+        response.setCategories(categories);
+        response.setCategoryId(resolvePrimaryCategoryId(normalizedCategoryIds));
+        response.setCategory(resolvePrimaryCategory(categories));
+        response.setLevel(resolveLevel(response.getLevelId()));
         if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
             return response;
         }
@@ -267,6 +322,18 @@ public class CourseServiceImpl implements CourseService {
         if (responses == null || responses.isEmpty()) {
             return responses;
         }
+        HashSet<String> categoryIds = responses.stream()
+                .flatMap(response -> normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId()).stream())
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<String, CategoryResponse> categoriesById = findCategoriesByIds(categoryIds);
+
+        HashSet<String> levelIds = responses.stream()
+                .map(CourseResponse::getLevelId)
+                .filter(this::hasText)
+                .map(String::trim)
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<String, CourseLevelResponse> levelsById = findLevelsByIds(levelIds);
+
         HashSet<String> instructorIds = responses.stream()
                 .map(CourseResponse::getInstructorId)
                 .filter(value -> value != null && !value.isBlank())
@@ -275,6 +342,18 @@ public class CourseServiceImpl implements CourseService {
                 instructorProjectionService.findSummariesByInstructorIds(instructorIds);
 
         for (CourseResponse response : responses) {
+            response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
+            List<String> normalizedCategoryIds = normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId());
+            response.setCategoryIds(normalizedCategoryIds);
+            List<CategoryResponse> categories = normalizedCategoryIds.stream()
+                    .map(categoriesById::get)
+                    .filter(item -> item != null)
+                    .toList();
+            response.setCategories(categories);
+            response.setCategoryId(resolvePrimaryCategoryId(normalizedCategoryIds));
+            response.setCategory(resolvePrimaryCategory(categories));
+            String normalizedLevelId = normalizeLevelId(response.getLevelId());
+            response.setLevel(normalizedLevelId == null ? null : levelsById.get(normalizedLevelId));
             if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
                 continue;
             }
@@ -314,11 +393,11 @@ public class CourseServiceImpl implements CourseService {
     }
 
     private Course findCourse(String id) {
-        return courseRepository.findById(id).orElseThrow(CourseNotFoundException::new);
+        return courseRepository.findByIdAndDeletedAtIsNull(id).orElseThrow(CourseNotFoundException::new);
     }
 
     private Course findPublishedCourse(String id) {
-        return courseRepository.findByIdAndStatus(id, CourseStatus.PUBLISHED)
+        return courseRepository.findByIdAndStatusAndDeletedAtIsNull(id, CourseStatus.PUBLISHED)
                 .orElseThrow(CourseNotFoundException::new);
     }
 
@@ -343,7 +422,119 @@ public class CourseServiceImpl implements CourseService {
         if (course.getPrice() == null || course.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             return false;
         }
+        if (!hasText(course.getLevelId())) {
+            return false;
+        }
+        if (normalizeCategoryIds(course.getCategoryIds(), legacyCategoryId(course)).isEmpty()) {
+            return false;
+        }
         return course.getLessons() != null && !course.getLessons().isEmpty();
+    }
+
+    private List<String> normalizeAndValidateCategoryIds(List<String> categoryIds) {
+        List<String> normalizedCategoryIds = normalizeCategoryIds(categoryIds, null);
+        if (normalizedCategoryIds.isEmpty()) {
+            throw new CourseCategoryNotFoundException();
+        }
+        Set<String> existingCategoryIds = categoryRepository.findAllById(normalizedCategoryIds).stream()
+                .map(Category::getId)
+                .collect(Collectors.toSet());
+        if (existingCategoryIds.size() != normalizedCategoryIds.size()) {
+            throw new CourseCategoryNotFoundException();
+        }
+        return normalizedCategoryIds;
+    }
+
+    private String normalizeAndValidateLevelId(String levelId) {
+        String normalizedLevelId = normalizeLevelId(levelId);
+        if (normalizedLevelId == null || !courseLevelRepository.existsById(normalizedLevelId)) {
+            throw new CourseLevelNotFoundException();
+        }
+        return normalizedLevelId;
+    }
+
+    private String normalizeLevelId(String levelId) {
+        if (!hasText(levelId)) {
+            return null;
+        }
+        return levelId.trim();
+    }
+
+    private Map<String, CategoryResponse> findCategoriesByIds(Set<String> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return Map.of();
+        }
+        return categoryRepository.findAllById(categoryIds).stream()
+                .collect(Collectors.toMap(Category::getId, this::toCategoryResponse));
+    }
+
+    private Map<String, CourseLevelResponse> findLevelsByIds(Set<String> levelIds) {
+        if (levelIds == null || levelIds.isEmpty()) {
+            return Map.of();
+        }
+        return courseLevelRepository.findAllById(levelIds).stream()
+                .collect(Collectors.toMap(CourseLevel::getId, this::toCourseLevelResponse));
+    }
+
+    private CourseLevelResponse resolveLevel(String levelId) {
+        String normalizedLevelId = normalizeLevelId(levelId);
+        if (normalizedLevelId == null) {
+            return null;
+        }
+        return courseLevelRepository.findById(normalizedLevelId)
+                .map(this::toCourseLevelResponse)
+                .orElse(null);
+    }
+
+    private CategoryResponse toCategoryResponse(Category category) {
+        return CategoryResponse.builder()
+                .id(category.getId())
+                .categoryName(category.getCategoryName())
+                .build();
+    }
+
+    private CourseLevelResponse toCourseLevelResponse(CourseLevel courseLevel) {
+        return CourseLevelResponse.builder()
+                .id(courseLevel.getId())
+                .levelName(courseLevel.getLevelName())
+                .build();
+    }
+
+    @SuppressWarnings("deprecation")
+    private List<String> normalizeCategoryIds(List<String> categoryIds, String fallbackCategoryId) {
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (categoryIds != null) {
+            categoryIds.stream()
+                    .filter(this::hasText)
+                    .map(String::trim)
+                    .forEach(normalized::add);
+        }
+        if (normalized.isEmpty() && hasText(fallbackCategoryId)) {
+            normalized.add(fallbackCategoryId.trim());
+        }
+        return List.copyOf(normalized);
+    }
+
+    private String resolvePrimaryCategoryId(List<String> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return null;
+        }
+        return categoryIds.get(0);
+    }
+
+    @SuppressWarnings("deprecation")
+    private String legacyCategoryId(Course course) {
+        if (course == null) {
+            return null;
+        }
+        return course.getCategoryId();
+    }
+
+    private CategoryResponse resolvePrimaryCategory(List<CategoryResponse> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return null;
+        }
+        return categories.get(0);
     }
 
     private void requireAdmin(AuthContext authContext) {

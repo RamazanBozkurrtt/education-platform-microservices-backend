@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: course-service
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  servlet:
+    multipart:
+      max-file-size: ${COURSE_MEDIA_MAX_FILE_SIZE:2GB}
+      max-request-size: ${COURSE_MEDIA_MAX_REQUEST_SIZE:2100MB}
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
     group:
@@ -45,6 +51,8 @@ course:
   media:
     base-path: ${COURSE_MEDIA_BASE_PATH:videos}
     image-base-path: ${COURSE_IMAGE_BASE_PATH:images/courses}
+    playback-signing-key: ${COURSE_MEDIA_PLAYBACK_SIGNING_KEY:${JWT_SECRET}}
+    playback-url-ttl-seconds: ${COURSE_MEDIA_PLAYBACK_URL_TTL_SECONDS:900}
     minio:
       endpoint: ${COURSE_MEDIA_MINIO_ENDPOINT}
       access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY}

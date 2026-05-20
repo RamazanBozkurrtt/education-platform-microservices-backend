@@ -9,11 +9,15 @@ import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 
 public interface CourseRepository extends MongoRepository<Course, String> {
-    Optional<Course> findByIdAndStatus(String id, CourseStatus status);
+    Optional<Course> findByIdAndDeletedAtIsNull(String id);
 
-    Page<Course> findAllByStatus(CourseStatus status, Pageable pageable);
+    Optional<Course> findByIdAndStatusAndDeletedAtIsNull(String id, CourseStatus status);
 
-    Page<Course> findAllByInstructorId(String instructorId, Pageable pageable);
+    Page<Course> findAllByDeletedAtIsNull(Pageable pageable);
 
-    boolean existsByIdAndInstructorId(String id, String instructorId);
+    Page<Course> findAllByStatusAndDeletedAtIsNull(CourseStatus status, Pageable pageable);
+
+    Page<Course> findAllByInstructorIdAndDeletedAtIsNull(String instructorId, Pageable pageable);
+
+    boolean existsByIdAndInstructorIdAndDeletedAtIsNull(String id, String instructorId);
 }

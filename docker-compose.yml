@@ -53,6 +53,24 @@ services:
       timeout: 5s
       retries: 10
 
+  review-postgres:
+    image: postgres:15
+    container_name: review-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edubase_review_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - review_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d edubase_review_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   course-projection-postgres:
     image: postgres:15
     container_name: course-projection-postgres
@@ -339,6 +357,31 @@ services:
     ports:
       - "8084:8084"
 
+  review-service:
+    build:
+      context: .
+      dockerfile: review-service/Dockerfile
+    container_name: review-service
+    restart: unless-stopped
+    depends_on:
+      review-postgres:
+        condition: service_healthy
+      course-service:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      REVIEW_DB_URL: jdbc:postgresql://review-postgres:5432/edubase_review_db
+      REVIEW_DB_USERNAME: postgres
+      REVIEW_DB_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://review-postgres:5432/edubase_review_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      GATEWAY_URL: http://api-gateway:8090
+      COURSE_SERVICE_URL: http://course-service:8083
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8086:8086"
+
   search-service:
     build:
       context: .
@@ -379,6 +422,8 @@ services:
         condition: service_started
       enrollment-service:
         condition: service_started
+      review-service:
+        condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: docker
       REDIS_HOST: redis
@@ -387,6 +432,7 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       COURSE_SERVICE_URL: http://course-service:8083
       ENROLLMENT_SERVICE_URL: http://enrollment-service:8084
+      REVIEW_SERVICE_URL: http://review-service:8086
       JWT_SECRET: ${JWT_SECRET}
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
     ports:
@@ -396,6 +442,7 @@ volumes:
   auth_postgres_data:
   user_postgres_data:
   enrollment_postgres_data:
+  review_postgres_data:
   course_projection_postgres_data:
   course_mongo_data:
   elasticsearch_data:

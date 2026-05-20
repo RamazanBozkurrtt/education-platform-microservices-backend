@@ -29,6 +29,8 @@ jwt:
 services:
   api-gateway:
     url: http://localhost:8090
+  auth-service:
+    url: http://localhost:8080
 
 app:
   internal:

@@ -32,6 +32,7 @@ public class JwtService {
     private static final String USER_ID_CLAIM = "user_id";
 
     private final JwtProperties jwtProperties;
+    private volatile SecretKey signInKey;
 
 
     public String extractUsername(String token) {
@@ -196,6 +197,21 @@ public class JwtService {
     }
 
     private SecretKey getSignInKey() {
+        SecretKey cached = signInKey;
+        if (cached != null) {
+            return cached;
+        }
+
+        synchronized (this) {
+            if (signInKey != null) {
+                return signInKey;
+            }
+            signInKey = createSignInKey();
+            return signInKey;
+        }
+    }
+
+    private SecretKey createSignInKey() {
         String secret = jwtProperties.getSecret();
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("JWT secret is missing.");

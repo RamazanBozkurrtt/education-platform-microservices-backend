@@ -29,6 +29,7 @@
         <module>api-gateway</module>
         <module>course-service</module>
         <module>enrollment-service</module>
+        <module>review-service</module>
         <module>search-service</module>
     </modules>
 

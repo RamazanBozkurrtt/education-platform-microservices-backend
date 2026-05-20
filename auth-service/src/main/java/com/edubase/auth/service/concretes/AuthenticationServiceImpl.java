@@ -26,13 +26,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StopWatch;
 import org.springframework.util.StringUtils;
 
 import java.net.URLEncoder;
@@ -61,7 +60,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private static final String LOGIN_BLOCK_PREFIX = "login:block:";
 
     private final JwtService jwtService;
-    private final AuthenticationManager authenticationManager;
     private final RefreshTokenRepository  refreshTokenRepository;
     private final AccountReactivationTokenRepository accountReactivationTokenRepository;
     private final UserMapper userMapper;
@@ -92,29 +90,36 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .build();
         var userDB = userRepository.save(user);
         applicationEventPublisher.publishEvent(new UserRegisteredDomainEvent(userDB.getId(), userDB.getEmail()));
-        return userMapper.toResponseFromEntity(userDB);
+        UserResponse response = userMapper.toResponseFromEntity(userDB);
+        response.setRoles(userDB.getRoles().stream().map(Role::getName).sorted().toList());
+        return response;
     }
 
     public void revokeAllUserRefreshTokens(User user) {
-        var validUserTokens = refreshTokenRepository.findAllValidRefreshTokenByUser(user.getId());
-        if (validUserTokens.isEmpty())
-            return;
-        validUserTokens.forEach(token -> {
-            token.setRevoked(true);
-        });
-        refreshTokenRepository.saveAll(validUserTokens);
+        refreshTokenRepository.revokeAllValidTokensByUserId(user.getId());
     }
 
 
     //LOGIN
     @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
+        StopWatch stopWatch = new StopWatch("auth-login");
+        stopWatch.start("normalize-email");
         String email = normalizeEmail(request.email());
+        stopWatch.stop();
 
+        stopWatch.start("check-login-block");
         if (isLoginBlocked(email)) {
+            stopWatch.stop();
+            log.info("Login rejected as blocked. email={} totalMs={} breakdown={}",
+                    email,
+                    stopWatch.getTotalTimeMillis(),
+                    stopWatch.prettyPrint());
             throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
         }
+        stopWatch.stop();
 
+        stopWatch.start("load-user");
         var user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
                     boolean blocked = recordLoginFailure(email);
@@ -123,41 +128,75 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     }
                     return new BusinessException(ErrorCode.AUTH_LOGIN_FAILED);
                 });
+        stopWatch.stop();
 
         if (user.getUserStatus() == UserStatus.DEACTIVATED) {
+            stopWatch.start("verify-password-deactivated");
             if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+                stopWatch.stop();
                 boolean blocked = recordLoginFailure(email);
                 if (blocked) {
                     throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
                 }
                 throw new BadCredentialsException("Kullanici adi veya sifre hatali");
             }
+            stopWatch.stop();
+
+            stopWatch.start("build-reactivation-flow");
             String reactivationLink = createReactivationLink(user);
             emailService.sendAccountReactivationEmail(user.getEmail(), reactivationLink);
             clearLoginFailures(email);
+            stopWatch.stop();
+            log.info("Login converted to reactivation. email={} totalMs={} breakdown={}",
+                    email,
+                    stopWatch.getTotalTimeMillis(),
+                    stopWatch.prettyPrint());
             return AuthenticationResponse.forReactivation(reactivationLink);
         }
 
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            email,
-                            request.password()
-                    )
-            );
-        } catch (BadCredentialsException ex) {
+        if (user.isLocked()) {
+            log.info("Login rejected due to locked user. email={} totalMs={} breakdown={}",
+                    email,
+                    stopWatch.getTotalTimeMillis(),
+                    stopWatch.prettyPrint());
+            throw new BusinessException(ErrorCode.AUTH_LOCKED_OR_INACTIVE);
+        }
+
+        stopWatch.start("verify-password");
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            stopWatch.stop();
             boolean blocked = recordLoginFailure(email);
             if (blocked) {
                 throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
             }
             throw new BusinessException(ErrorCode.AUTH_LOGIN_FAILED);
         }
+        stopWatch.stop();
 
+        stopWatch.start("generate-access-token");
         var token = jwtService.generateToken(user);
+        stopWatch.stop();
+
+        stopWatch.start("revoke-old-refresh-tokens");
         revokeAllUserRefreshTokens(user);
+        stopWatch.stop();
+
+        stopWatch.start("generate-refresh-token");
         var refreshToken = jwtService.generateRefreshToken(user);
+        stopWatch.stop();
+
+        stopWatch.start("save-refresh-token");
         refreshTokenRepository.save(refreshToken);
+        stopWatch.stop();
+
+        stopWatch.start("clear-login-failures");
         clearLoginFailures(email);
+        stopWatch.stop();
+
+        log.info("Login success. email={} totalMs={} breakdown={}",
+                email,
+                stopWatch.getTotalTimeMillis(),
+                stopWatch.prettyPrint());
         return AuthenticationResponse.forTokens(
                 token,
                 refreshToken.getRefreshToken(),
@@ -266,6 +305,38 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         revokeAllUserRefreshTokens(user);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse grantInstructorRoleForCurrentUser(String authenticatedEmail) {
+        String email = normalizeEmail(authenticatedEmail);
+        if (email.isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Role instructorRole = roleRepository.findByName("ROLE_INSTRUCTOR")
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_NOT_FOUND));
+
+        user.getRoles().add(instructorRole);
+        userRepository.save(user);
+
+        revokeAllUserRefreshTokens(user);
+
+        String accessToken = jwtService.generateToken(user);
+        var refreshToken = jwtService.generateRefreshToken(user);
+        refreshTokenRepository.save(refreshToken);
+
+        return AuthenticationResponse.forTokens(
+                accessToken,
+                refreshToken.getRefreshToken(),
+                user.getId(),
+                user.getEmail(),
+                user.getRoles().stream().map(Role::getName).sorted().toList()
+        );
     }
 
     private String createReactivationLink(User user) {

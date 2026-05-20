@@ -72,6 +72,7 @@ public class SecurityConfig {
             "/api/v1/users/public/**",
             "/courses/public/**",
             "/api/v1/courses/public/**",
+            "/api/v1/reviews/courses/**",
             "/actuator/health",
             "/actuator/info",
             "/favicon.ico",
@@ -99,6 +100,7 @@ public class SecurityConfig {
                         .pathMatchers(PUBLIC_PATHS).permitAll()
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
                         .pathMatchers("/api/v1/users/**").hasAnyRole("USER", "ADMIN")
+                        .pathMatchers("/api/v1/instructors/**").hasAnyRole("USER", "INSTRUCTOR", "ADMIN")
                         .anyExchange().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
@@ -163,11 +165,13 @@ public class SecurityConfig {
             @Value("${cors.allowed-origins:}") String allowedOrigins,
             @Value("${cors.allowed-methods:}") String allowedMethods,
             @Value("${cors.allowed-headers:}") String allowedHeaders,
+            @Value("${cors.exposed-headers:}") String exposedHeaders,
             @Value("${cors.allow-credentials}") boolean allowCredentials
     ) {
         List<String> originList = splitCsv(allowedOrigins);
         List<String> methodList = splitCsv(allowedMethods);
         List<String> headerList = splitCsv(allowedHeaders);
+        List<String> exposedHeaderList = splitCsv(exposedHeaders);
 
         CorsConfiguration configuration = new CorsConfiguration();
         if (!originList.isEmpty()) {
@@ -178,6 +182,9 @@ public class SecurityConfig {
         }
         if (!headerList.isEmpty()) {
             configuration.setAllowedHeaders(headerList);
+        }
+        if (!exposedHeaderList.isEmpty()) {
+            configuration.setExposedHeaders(exposedHeaderList);
         }
         configuration.setAllowCredentials(allowCredentials);
         configuration.setMaxAge(3600L);

@@ -10,6 +10,8 @@ services:
     url: http://course-service:8083
   enrollment-service:
     url: http://enrollment-service:8084
+  review-service:
+    url: http://review-service:8086
 
 spring:
   data:
@@ -24,5 +26,6 @@ jwt:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
   allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,PATCH,OPTIONS}
-  allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With}
+  allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With,Range}
+  exposed-headers: ${CORS_EXPOSED_HEADERS:Accept-Ranges,Content-Range,Content-Length,Content-Type}
   allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}

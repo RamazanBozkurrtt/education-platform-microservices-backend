@@ -28,13 +28,25 @@ public class Course {
     private BigDecimal price;
     private CourseStatus status;
     private String instructorId;
+
+    @Builder.Default
+    private List<String> categoryIds = new ArrayList<>();
+
+    /**
+     * @deprecated Backward compatibility field for older documents/clients.
+     */
+    @Deprecated
     private String categoryId;
+
+    private String levelId;
 
     @CreatedDate
     private Instant createdAt;
 
     @LastModifiedDate
     private Instant updatedAt;
+
+    private Instant deletedAt;
 
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();

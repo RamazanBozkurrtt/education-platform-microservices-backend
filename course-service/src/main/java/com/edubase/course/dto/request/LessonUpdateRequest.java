@@ -24,7 +24,6 @@ public class LessonUpdateRequest {
     @Pattern(regexp = "^\\S+(?:\\s+\\S+)?$", message = "Summary title must be 1 or 2 words")
     private String summaryTitle;
 
-    @NotBlank(message = "Video URL is required")
     @Size(max = 1000, message = "Video URL must be at most 1000 characters")
     private String videoUrl;
 

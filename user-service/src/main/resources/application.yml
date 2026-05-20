@@ -54,6 +54,7 @@ app:
       instructor-lifecycle: ${KAFKA_TOPIC_INSTRUCTOR_LIFECYCLE:instructor.lifecycle.v1}
   internal:
     api-key: ${INTERNAL_API_KEY}
+    auth-service-base-url: ${services.auth-service.url}
 
 user:
   media:

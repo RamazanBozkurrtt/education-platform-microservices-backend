@@ -27,6 +27,8 @@ jwt:
 services:
   api-gateway:
     url: http://api-gateway:8090
+  auth-service:
+    url: http://auth-service:8080
 
 user:
   media:

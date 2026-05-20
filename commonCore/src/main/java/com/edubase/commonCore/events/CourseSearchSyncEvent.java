@@ -14,6 +14,7 @@ public record CourseSearchSyncEvent(
         String description,
         String instructorId,
         String categoryId,
+        List<String> categoryIds,
         BigDecimal price,
         String status,
         List<String> tags,

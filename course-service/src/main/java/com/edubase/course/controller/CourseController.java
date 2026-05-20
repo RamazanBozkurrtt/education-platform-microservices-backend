@@ -126,4 +126,12 @@ public class CourseController extends RestBaseController {
         AuthContext authContext = authContextResolver.requireAuth(jwt);
         return ok(courseService.publishCourse(authContext, id));
     }
+
+    @PostMapping("/{id}/unpublish")
+    public ResponseEntity<RestResponse<CourseResponse>> unpublishCourse(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String id) {
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ok(courseService.unpublishCourse(authContext, id));
+    }
 }

@@ -3,12 +3,15 @@ package com.edubase.course.handler;
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.commonCore.utils.RestResponse;
+import org.apache.catalina.connector.ClientAbortException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -57,8 +60,13 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = ex.getErrorCode();
         HttpStatus status = statusOf(errorCode);
 
-        log.warn("BUSINESS_EXCEPTION | status={} code={} {} msg={}",
-                status, errorCode.getCode(), requestMeta(request), ex.getMessage());
+        if (status.is5xxServerError()) {
+            log.error("BUSINESS_EXCEPTION | status={} code={} {} msg={}",
+                    status, errorCode.getCode(), requestMeta(request), ex.getMessage(), ex);
+        } else {
+            log.warn("BUSINESS_EXCEPTION | status={} code={} {} msg={}",
+                    status, errorCode.getCode(), requestMeta(request), ex.getMessage());
+        }
 
         return ResponseEntity
                 .status(status)
@@ -93,6 +101,39 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(status)
                 .body(RestResponse.error(status.value(), "Access denied"));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<RestResponse<Object>> handleUnreadableMessage(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+        HttpStatus status = statusOf(errorCode);
+
+        log.warn("REQUEST_BODY_PARSE_ERROR | status={} code={} {} msg={}",
+                status, errorCode.getCode(), requestMeta(request), ex.getMessage());
+
+        return ResponseEntity
+                .status(status)
+                .body(RestResponse.error(status.value(), "Invalid request body format"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<RestResponse<Object>> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        ErrorCode errorCode = ErrorCode.UNSUPPORTED_MEDIA_TYPE;
+        HttpStatus status = statusOf(errorCode);
+
+        log.warn("UNSUPPORTED_MEDIA_TYPE | status={} code={} {} msg={}",
+                status, errorCode.getCode(), requestMeta(request), ex.getMessage());
+
+        return ResponseEntity
+                .status(status)
+                .body(RestResponse.error(status.value(), "Unsupported Content-Type"));
+    }
+
+    @ExceptionHandler(ClientAbortException.class)
+    public ResponseEntity<Void> handleClientAbortException(ClientAbortException ex, HttpServletRequest request) {
+        log.info("CLIENT_ABORT | {} msg={}",
+                requestMeta(request), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
     @ExceptionHandler(Exception.class)

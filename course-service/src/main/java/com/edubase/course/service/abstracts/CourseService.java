@@ -33,4 +33,6 @@ public interface CourseService {
     void deleteLesson(AuthContext authContext, String courseId, String lessonId);
 
     CourseResponse publishCourse(AuthContext authContext, String id);
+
+    CourseResponse unpublishCourse(AuthContext authContext, String id);
 }

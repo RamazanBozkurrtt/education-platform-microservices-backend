@@ -8,6 +8,7 @@ public record SearchCourseHit(
         String description,
         String instructorId,
         String categoryId,
+        List<String> categoryIds,
         Double price,
         String status,
         List<String> tags,
