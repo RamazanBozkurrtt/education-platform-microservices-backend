@@ -9,6 +9,8 @@ import com.edubase.enrollment.entity.EnrollmentStatus;
 import com.edubase.enrollment.exception.EnrollmentAlreadyExistsException;
 import com.edubase.enrollment.exception.EnrollmentNotFoundException;
 import com.edubase.enrollment.grpc.CourseGrpcClient;
+import com.edubase.enrollment.grpc.CourseSummary;
+import com.edubase.enrollment.grpc.PaymentGrpcClient;
 import com.edubase.enrollment.grpc.UserGrpcClient;
 import com.edubase.enrollment.repository.EnrollmentRepository;
 import com.edubase.enrollment.security.AuthContext;
@@ -54,6 +56,9 @@ class EnrollmentServiceImplTest {
     private CourseGrpcClient courseGrpcClient;
 
     @Mock
+    private PaymentGrpcClient paymentGrpcClient;
+
+    @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
@@ -72,6 +77,8 @@ class EnrollmentServiceImplTest {
 
         when(enrollmentRepository.findByUserIdAndCourseId(10L, "course-1"))
                 .thenReturn(Optional.empty());
+        when(courseGrpcClient.getPublishedCourse("course-1"))
+                .thenReturn(new CourseSummary("course-1", java.math.BigDecimal.ZERO, "TRY"));
         when(enrollmentMapper.toEntityFromRequest(request)).thenReturn(mapped);
         when(enrollmentRepository.save(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(enrollmentMapper.toResponseFromEntity(any(Enrollment.class))).thenReturn(response);
@@ -107,6 +114,8 @@ class EnrollmentServiceImplTest {
 
         when(enrollmentRepository.findByUserIdAndCourseId(5L, "course-2"))
                 .thenReturn(Optional.of(existing));
+        when(courseGrpcClient.getPublishedCourse("course-2"))
+                .thenReturn(new CourseSummary("course-2", java.math.BigDecimal.ZERO, "TRY"));
         when(enrollmentRepository.save(existing)).thenReturn(existing);
         when(enrollmentMapper.toResponseFromEntity(existing)).thenReturn(response);
 
@@ -131,6 +140,8 @@ class EnrollmentServiceImplTest {
 
         when(enrollmentRepository.findByUserIdAndCourseId(3L, "course-3"))
                 .thenReturn(Optional.of(existing));
+        when(courseGrpcClient.getPublishedCourse("course-3"))
+                .thenReturn(new CourseSummary("course-3", java.math.BigDecimal.ZERO, "TRY"));
 
         assertThrows(EnrollmentAlreadyExistsException.class,
                 () -> enrollmentService.createEnrollment(authContext, request));
@@ -160,6 +171,8 @@ class EnrollmentServiceImplTest {
 
         when(enrollmentRepository.findByUserIdAndCourseId(7L, "course-5"))
                 .thenReturn(Optional.empty());
+        when(courseGrpcClient.getPublishedCourse("course-5"))
+                .thenReturn(new CourseSummary("course-5", java.math.BigDecimal.ZERO, "TRY"));
         when(enrollmentMapper.toEntityFromRequest(request)).thenReturn(new Enrollment());
         when(enrollmentRepository.save(any(Enrollment.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
@@ -216,5 +229,27 @@ class EnrollmentServiceImplTest {
 
         assertThrows(EnrollmentNotFoundException.class,
                 () -> enrollmentService.getEnrollmentById(authContext, 99L));
+    }
+
+    @Test
+    void createEnrollment_shouldRequireSuccessfulPaymentForPaidCourse() {
+        AuthContext authContext = new AuthContext("10", UserRole.STUDENT);
+        EnrollmentCreateRequest request = EnrollmentCreateRequest.builder()
+                .courseId("course-paid")
+                .build();
+
+        when(courseGrpcClient.getPublishedCourse("course-paid"))
+                .thenReturn(new CourseSummary("course-paid", java.math.BigDecimal.TEN, "TRY"));
+        when(enrollmentRepository.findByUserIdAndCourseId(10L, "course-paid"))
+                .thenReturn(Optional.empty());
+        when(enrollmentMapper.toEntityFromRequest(request)).thenReturn(new Enrollment());
+        when(enrollmentRepository.save(any(Enrollment.class))).thenAnswer(inv -> inv.getArgument(0));
+        EnrollmentResponse enrollmentResponse = EnrollmentResponse.builder().build();
+        enrollmentResponse.setId(12L);
+        when(enrollmentMapper.toResponseFromEntity(any(Enrollment.class))).thenReturn(enrollmentResponse);
+
+        enrollmentService.createEnrollment(authContext, request);
+
+        verify(paymentGrpcClient).assertSuccessfulPayment(10L, "course-paid");
     }
 }

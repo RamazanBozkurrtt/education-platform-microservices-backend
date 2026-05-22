@@ -53,6 +53,24 @@ services:
       timeout: 5s
       retries: 10
 
+  payment-postgres:
+    image: postgres:15
+    container_name: payment-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edubase_payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5437:5432"
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d edubase_payment_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   review-postgres:
     image: postgres:15
     container_name: review-postgres
@@ -337,6 +355,8 @@ services:
         condition: service_started
       course-service:
         condition: service_started
+      payment-service:
+        condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: docker
       ENROLLMENT_DB_URL: jdbc:postgresql://enrollment-postgres:5432/edubase_enrollment_db
@@ -353,9 +373,49 @@ services:
       USER_GRPC_PORT: 9091
       COURSE_GRPC_HOST: course-service
       COURSE_GRPC_PORT: 9092
+      PAYMENT_GRPC_HOST: payment-service
+      PAYMENT_GRPC_PORT: 9095
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-internal-api-key}
       JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8084:8084"
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    restart: unless-stopped
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      course-service:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      PAYMENT_DB_URL: jdbc:postgresql://payment-postgres:5432/edubase_payment_db
+      PAYMENT_DB_USERNAME: postgres
+      PAYMENT_DB_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://payment-postgres:5432/edubase_payment_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_PAYMENT_SUCCEEDED: payment.succeeded.v1
+      KAFKA_TOPIC_PAYMENT_REFUNDED: payment.refunded.v1
+      GATEWAY_URL: http://api-gateway:8090
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9091
+      COURSE_GRPC_HOST: course-service
+      COURSE_GRPC_PORT: 9092
+      PAYMENT_GRPC_PORT: 9095
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8087:8087"
+      - "9095:9095"
 
   review-service:
     build:
@@ -422,6 +482,8 @@ services:
         condition: service_started
       enrollment-service:
         condition: service_started
+      payment-service:
+        condition: service_started
       review-service:
         condition: service_started
     environment:
@@ -432,6 +494,7 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       COURSE_SERVICE_URL: http://course-service:8083
       ENROLLMENT_SERVICE_URL: http://enrollment-service:8084
+      PAYMENT_SERVICE_URL: http://payment-service:8087
       REVIEW_SERVICE_URL: http://review-service:8086
       JWT_SECRET: ${JWT_SECRET}
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
@@ -442,6 +505,7 @@ volumes:
   auth_postgres_data:
   user_postgres_data:
   enrollment_postgres_data:
+  payment_postgres_data:
   review_postgres_data:
   course_projection_postgres_data:
   course_mongo_data:

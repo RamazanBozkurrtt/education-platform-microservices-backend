@@ -10,6 +10,8 @@ services:
     url: http://localhost:8083
   enrollment-service:
     url: http://localhost:8084
+  payment-service:
+    url: http://localhost:8087
   review-service:
     url: http://localhost:8086
 

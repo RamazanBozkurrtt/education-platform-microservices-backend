@@ -20,4 +20,6 @@ message CourseByIdResponse {
   bool published = 3;
   string instructor_id = 4;
   string title = 5;
+  string price = 6;
+  string currency = 7;
 }

@@ -28,6 +28,10 @@ services:
   course-service:
     url: http://localhost:8083
 
+app:
+  internal:
+    api-key: local-internal-api-key
+
 grpc:
   client:
     user:
@@ -36,6 +40,9 @@ grpc:
     course:
       host: localhost
       port: 9093
+    payment:
+      host: localhost
+      port: 9095
 
 management:
   endpoint:

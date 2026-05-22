@@ -33,6 +33,8 @@ services:
     url: http://api-gateway:8090
   user-service:
     url: http://user-service:8081
+  enrollment-service:
+    url: http://enrollment-service:8084
 
 grpc:
   server:

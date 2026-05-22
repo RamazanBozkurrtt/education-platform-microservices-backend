@@ -5,6 +5,7 @@ import com.edubase.auth.controller.base.RestBaseController;
 import com.edubase.auth.dto.*;
 import com.edubase.auth.security.UserPrincipal;
 import com.edubase.auth.service.abstracts.AuthenticationService;
+import com.edubase.auth.service.abstracts.PasswordResetService;
 import com.edubase.auth.service.abstracts.RefreshTokenService;
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
@@ -25,6 +26,7 @@ public class AuthController extends RestBaseController {
 
     private final AuthenticationService authenticationService;
     private final RefreshTokenService refreshTokenService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     @Operation(summary = "User Register", description = "Creates a new user account.")
@@ -48,6 +50,27 @@ public class AuthController extends RestBaseController {
         return ok(refreshTokenService.refreshToken(request));
     }
 
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Forgot password", description = "Sends password reset email when account exists.")
+    public ResponseEntity<RestResponse<MessageResponse>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+        passwordResetService.forgotPassword(request.email());
+        return ok(new MessageResponse("If an account exists with this email, a password reset link has been sent."));
+    }
+
+    @PostMapping("/reactivate-account/request")
+    @Operation(summary = "Request account reactivation", description = "Sends account reactivation email when account exists and is eligible.")
+    public ResponseEntity<RestResponse<MessageResponse>> requestReactivation(@RequestBody @Valid ReactivateAccountRequest request) {
+        authenticationService.requestAccountReactivation(request.email());
+        return ok(new MessageResponse("If an account exists and is eligible for reactivation, a reactivation link has been sent."));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password", description = "Resets password using one-time reset token.")
+    public ResponseEntity<RestResponse<MessageResponse>> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request.token(), request.newPassword(), request.confirmPassword());
+        return ok(new MessageResponse("Password has been reset successfully."));
+    }
+
     @GetMapping("/reactivate-account")
     @Operation(summary = "Reactivate account", description = "Reactivates account using one-time token.")
     public ResponseEntity<RestResponse<String>> reactivateAccount(@RequestParam("token") String token) {
@@ -66,7 +89,8 @@ public class AuthController extends RestBaseController {
     }
 
     @DeleteMapping("/me")
-    public ResponseEntity<?> deactivateUser(@AuthenticationPrincipal UserPrincipal principal) {
+    public ResponseEntity<?> deactivateUser(@RequestHeader("Authorization") String authHeader,
+                                            @AuthenticationPrincipal UserPrincipal principal) {
 
         if (principal == null) {
             throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
@@ -74,7 +98,7 @@ public class AuthController extends RestBaseController {
 
         String email = principal.getUsername();
 
-        authenticationService.deactivate(email);
+        authenticationService.deactivate(email, authHeader);
 
         return noContent();
     }

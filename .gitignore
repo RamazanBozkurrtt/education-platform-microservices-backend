@@ -24,3 +24,4 @@ logs/
 
 # Çevresel Değişkenler (GÜVENLİK İÇİN KRİTİK)
 .env
+keys.json

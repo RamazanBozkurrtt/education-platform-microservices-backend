@@ -19,5 +19,5 @@ services:
     url: ${API_GATEWAY_URL}
 
 app:
-  account-reactivation:
-    activation-base-url: ${AUTH_ACTIVATION_BASE_URL}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}

@@ -29,6 +29,10 @@ services:
   course-service:
     url: ${COURSE_SERVICE_URL}
 
+app:
+  internal:
+    api-key: ${INTERNAL_API_KEY}
+
 grpc:
   client:
     user:
@@ -37,6 +41,9 @@ grpc:
     course:
       host: ${COURSE_GRPC_HOST}
       port: ${COURSE_GRPC_PORT}
+    payment:
+      host: ${PAYMENT_GRPC_HOST}
+      port: ${PAYMENT_GRPC_PORT}
 
 management:
   endpoint:

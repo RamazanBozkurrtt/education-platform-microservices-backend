@@ -48,6 +48,8 @@ jwt:
   audience: ${JWT_AUDIENCE}
 
 course:
+  progress:
+    completion-threshold-percentage: ${COURSE_PROGRESS_COMPLETION_THRESHOLD_PERCENTAGE:90}
   media:
     base-path: ${COURSE_MEDIA_BASE_PATH:videos}
     image-base-path: ${COURSE_IMAGE_BASE_PATH:images/courses}
@@ -78,4 +80,5 @@ app:
       course-search-sync: ${KAFKA_TOPIC_COURSE_SEARCH_SYNC:course.search.sync.v1}
   internal:
     api-key: ${INTERNAL_API_KEY}
+    enrollment-service-base-url: ${ENROLLMENT_SERVICE_INTERNAL_BASE_URL:${services.enrollment-service.url}}
     user-service-base-url: ${services.user-service.url}

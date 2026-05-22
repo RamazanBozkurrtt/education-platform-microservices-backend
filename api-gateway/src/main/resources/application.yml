@@ -87,6 +87,17 @@ spring:
                 redis-rate-limiter.replenishRate: ${RATE_LIMIT_ENROLLMENT_REPLENISH:20}
                 redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ENROLLMENT_BURST:40}
                 redis-rate-limiter.requestedTokens: 1
+        - id: payment-service-route
+          uri: ${services.payment-service.url}
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_PAYMENT_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_PAYMENT_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
         - id: review-service-route
           uri: ${services.review-service.url}
           predicates:
@@ -122,6 +133,12 @@ spring:
             - Path=/v3/api-docs/enrollment
           filters:
             - SetPath=/v3/api-docs
+        - id: payment-service-docs
+          uri: ${services.payment-service.url}
+          predicates:
+            - Path=/v3/api-docs/payment
+          filters:
+            - SetPath=/v3/api-docs
         - id: review-service-docs
           uri: ${services.review-service.url}
           predicates:
@@ -151,5 +168,7 @@ springdoc:
         url: /v3/api-docs/course
       - name: enrollment-service
         url: /v3/api-docs/enrollment
+      - name: payment-service
+        url: /v3/api-docs/payment
       - name: review-service
         url: /v3/api-docs/review

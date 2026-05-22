@@ -14,6 +14,7 @@ import com.edubase.course.dto.response.CourseLevelResponse;
 import com.edubase.course.dto.response.CourseResponse;
 import com.edubase.course.dto.response.CustomPageResponse;
 import com.edubase.course.dto.response.InstructorSummaryResponse;
+import com.edubase.course.dto.response.LessonResponse;
 import com.edubase.course.entity.Category;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseLevel;
@@ -297,6 +298,7 @@ public class CourseServiceImpl implements CourseService {
         if (response == null) {
             return response;
         }
+        response.setDuration(calculateTotalDurationSeconds(response.getLessons()));
         response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
         List<String> normalizedCategoryIds = normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId());
         response.setCategoryIds(normalizedCategoryIds);
@@ -342,6 +344,7 @@ public class CourseServiceImpl implements CourseService {
                 instructorProjectionService.findSummariesByInstructorIds(instructorIds);
 
         for (CourseResponse response : responses) {
+            response.setDuration(calculateTotalDurationSeconds(response.getLessons()));
             response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
             List<String> normalizedCategoryIds = normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId());
             response.setCategoryIds(normalizedCategoryIds);
@@ -464,7 +467,12 @@ public class CourseServiceImpl implements CourseService {
         if (categoryIds == null || categoryIds.isEmpty()) {
             return Map.of();
         }
-        return categoryRepository.findAllById(categoryIds).stream()
+        List<String> normalizedCategoryIds = categoryIds.stream()
+                .filter(this::hasText)
+                .map(String::trim)
+                .sorted()
+                .toList();
+        return categoryRepository.findAllById(normalizedCategoryIds).stream()
                 .collect(Collectors.toMap(Category::getId, this::toCategoryResponse));
     }
 
@@ -579,6 +587,21 @@ public class CourseServiceImpl implements CourseService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private Integer calculateTotalDurationSeconds(List<LessonResponse> lessons) {
+        if (lessons == null || lessons.isEmpty()) {
+            return 0;
+        }
+        long total = lessons.stream()
+                .map(LessonResponse::getDuration)
+                .filter(duration -> duration != null && duration > 0)
+                .mapToLong(Integer::longValue)
+                .sum();
+        if (total <= 0L) {
+            return 0;
+        }
+        return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
     }
 
     private String buildPublicCourseImageUrl(String courseId) {

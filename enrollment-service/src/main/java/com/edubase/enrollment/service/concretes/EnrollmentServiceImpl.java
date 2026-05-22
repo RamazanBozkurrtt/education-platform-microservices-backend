@@ -11,6 +11,8 @@ import com.edubase.enrollment.entity.EnrollmentStatus;
 import com.edubase.enrollment.exception.EnrollmentAlreadyExistsException;
 import com.edubase.enrollment.exception.EnrollmentNotFoundException;
 import com.edubase.enrollment.grpc.CourseGrpcClient;
+import com.edubase.enrollment.grpc.CourseSummary;
+import com.edubase.enrollment.grpc.PaymentGrpcClient;
 import com.edubase.enrollment.grpc.UserGrpcClient;
 import com.edubase.enrollment.messaging.EnrollmentCancelledDomainEvent;
 import com.edubase.enrollment.messaging.EnrollmentCreatedDomainEvent;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +43,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     private final EnrollmentMapper enrollmentMapper;
     private final UserGrpcClient userGrpcClient;
     private final CourseGrpcClient courseGrpcClient;
+    private final PaymentGrpcClient paymentGrpcClient;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
@@ -55,7 +59,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
         String courseId = normalizeCourseId(request.getCourseId());
         userGrpcClient.assertUserExists(targetUserId);
-        courseGrpcClient.assertCoursePublished(courseId);
+        CourseSummary courseSummary = courseGrpcClient.getPublishedCourse(courseId);
+        if (courseSummary.price() != null && courseSummary.price().compareTo(BigDecimal.ZERO) > 0) {
+            paymentGrpcClient.assertSuccessfulPayment(targetUserId, courseId);
+        }
         Optional<Enrollment> existing = enrollmentRepository.findByUserIdAndCourseId(targetUserId, courseId);
         if (existing.isPresent()) {
             Enrollment enrollment = existing.get();

@@ -12,11 +12,13 @@ public interface AuthenticationService {
 
     public AuthenticationResponse authenticate(AuthenticationRequest request);
 
+    void requestAccountReactivation(String email);
+
     public String reactivateAccount(String token);
 
     public void logout(String token, String authenticatedEmail);
 
-    public void deactivate(String email);
+    public void deactivate(String email, String authHeader);
 
     public void changePassword(String oldPassword, String newPassword, String authenticatedEmail);
 

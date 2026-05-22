@@ -32,6 +32,8 @@ jwt:
 
 app:
   gateway-url: ${services.api-gateway.url}
+  internal:
+    api-key: ${INTERNAL_API_KEY}
   kafka:
     topics:
       enrollment-created: ${KAFKA_TOPIC_ENROLLMENT_CREATED:enrollment.created.v1}
@@ -48,6 +50,9 @@ grpc:
     course:
       host: ${COURSE_GRPC_HOST:localhost}
       port: ${COURSE_GRPC_PORT:9093}
+    payment:
+      host: ${PAYMENT_GRPC_HOST:localhost}
+      port: ${PAYMENT_GRPC_PORT:9095}
 
 management:
   endpoints:

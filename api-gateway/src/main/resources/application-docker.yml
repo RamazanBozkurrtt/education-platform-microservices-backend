@@ -10,6 +10,8 @@ services:
     url: http://course-service:8083
   enrollment-service:
     url: http://enrollment-service:8084
+  payment-service:
+    url: http://payment-service:8087
   review-service:
     url: http://review-service:8086
 

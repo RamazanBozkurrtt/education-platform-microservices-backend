@@ -10,6 +10,7 @@ import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Service
@@ -31,6 +32,8 @@ public class CourseQueryGrpcService extends CourseQueryServiceGrpc.CourseQuerySe
                 .setPublished(course.map(Course::getStatus).filter(CourseStatus.PUBLISHED::equals).isPresent())
                 .setInstructorId(course.map(Course::getInstructorId).orElse(""))
                 .setTitle(course.map(Course::getTitle).orElse(""))
+                .setPrice(course.map(Course::getPrice).map(BigDecimal::toPlainString).orElse("0"))
+                .setCurrency("TRY")
                 .build();
 
         responseObserver.onNext(response);

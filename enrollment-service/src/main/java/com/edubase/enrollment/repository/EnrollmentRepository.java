@@ -1,6 +1,7 @@
 package com.edubase.enrollment.repository;
 
 import com.edubase.enrollment.entity.Enrollment;
+import com.edubase.enrollment.entity.EnrollmentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,4 +17,6 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     Page<Enrollment> findAllByCourseId(String courseId, Pageable pageable);
 
     boolean existsByIdAndUserId(Long id, Long userId);
+
+    boolean existsByUserIdAndCourseIdAndStatus(Long userId, String courseId, EnrollmentStatus status);
 }

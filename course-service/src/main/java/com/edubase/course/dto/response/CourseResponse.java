@@ -40,6 +40,7 @@ public class CourseResponse {
     private List<CategoryResponse> categories;
     private List<String> learningOutcomes;
     private List<String> tags;
+    private Integer duration;
     private Instant createdAt;
     private Instant updatedAt;
     private List<LessonResponse> lessons;

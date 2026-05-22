@@ -2,6 +2,7 @@ package com.edubase.auth.service.concretes;
 
 
 import com.edubase.auth.configuration.AccountReactivationProperties;
+import com.edubase.auth.configuration.FrontendProperties;
 import com.edubase.auth.configuration.mapper.UserMapper;
 import com.edubase.auth.dto.AuthenticationRequest;
 import com.edubase.auth.dto.AuthenticationResponse;
@@ -33,8 +34,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StopWatch;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -58,6 +59,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private static final Duration LOGIN_BLOCK_DURATION = Duration.ofMinutes(2);
     private static final String LOGIN_FAIL_PREFIX = "login:fail:";
     private static final String LOGIN_BLOCK_PREFIX = "login:block:";
+    private static final String REACTIVATION_REQUEST_MESSAGE =
+            "If an account exists and is eligible for reactivation, a reactivation link has been sent.";
 
     private final JwtService jwtService;
     private final RefreshTokenRepository  refreshTokenRepository;
@@ -69,6 +72,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final RedisTokenService redisTokenService;
     private final EmailService emailService;
     private final AccountReactivationProperties accountReactivationProperties;
+    private final FrontendProperties frontendProperties;
     private final RedisTemplate<String, String> redisTemplate;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -111,8 +115,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         stopWatch.start("check-login-block");
         if (isLoginBlocked(email)) {
             stopWatch.stop();
-            log.info("Login rejected as blocked. email={} totalMs={} breakdown={}",
-                    email,
+            log.info("Login rejected as blocked. totalMs={} breakdown={}",
                     stopWatch.getTotalTimeMillis(),
                     stopWatch.prettyPrint());
             throw new BusinessException(ErrorCode.AUTH_TOO_MANY_ATTEMPTS);
@@ -147,16 +150,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             emailService.sendAccountReactivationEmail(user.getEmail(), reactivationLink);
             clearLoginFailures(email);
             stopWatch.stop();
-            log.info("Login converted to reactivation. email={} totalMs={} breakdown={}",
-                    email,
+            log.info("Login converted to reactivation. totalMs={} breakdown={}",
                     stopWatch.getTotalTimeMillis(),
                     stopWatch.prettyPrint());
-            return AuthenticationResponse.forReactivation(reactivationLink);
+            return AuthenticationResponse.forReactivationRequired(REACTIVATION_REQUEST_MESSAGE);
         }
 
         if (user.isLocked()) {
-            log.info("Login rejected due to locked user. email={} totalMs={} breakdown={}",
-                    email,
+            log.info("Login rejected due to locked user. totalMs={} breakdown={}",
                     stopWatch.getTotalTimeMillis(),
                     stopWatch.prettyPrint());
             throw new BusinessException(ErrorCode.AUTH_LOCKED_OR_INACTIVE);
@@ -193,8 +194,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         clearLoginFailures(email);
         stopWatch.stop();
 
-        log.info("Login success. email={} totalMs={} breakdown={}",
-                email,
+        log.info("Login success. totalMs={} breakdown={}",
                 stopWatch.getTotalTimeMillis(),
                 stopWatch.prettyPrint());
         return AuthenticationResponse.forTokens(
@@ -204,6 +204,19 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getEmail(),
                 user.getRoles().stream().map(Role::getName).sorted().toList()
         );
+    }
+
+    @Override
+    @Transactional
+    public void requestAccountReactivation(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        if (normalizedEmail.isBlank()) {
+            return;
+        }
+
+        userRepository.findByEmail(normalizedEmail)
+                .filter(this::isEligibleForReactivation)
+                .ifPresent(this::sendReactivationEmail);
     }
 
     @Override
@@ -235,35 +248,21 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Override
     @Transactional
     public void logout(String token, String authenticatedEmail) {
-
-        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
-            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
-        }
-
-        if (token == null || !token.startsWith("Bearer ")) {
-            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
-        }
-
-        String accessToken = token.substring(7);
-        if (!jwtService.isTokenStructurallyValid(accessToken)) {
-            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
-        }
-
-        String userEmail = jwtService.extractUsername(accessToken);
-        if (userEmail == null || !userEmail.equalsIgnoreCase(authenticatedEmail.trim())) {
-            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
-        }
+        String accessToken = extractAndValidateAccessToken(token, authenticatedEmail);
 
         Date expirationDate = jwtService.extractExpiration(accessToken);
         redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
-        refreshTokenRepository.deleteByUserEmail(userEmail);
+        refreshTokenRepository.deleteByUserEmail(normalizeEmail(authenticatedEmail));
         SecurityContextHolder.clearContext();
     }
 
     @Override
     @Transactional
-    public void deactivate(String email) {
-        User user = userRepository.findByEmail(email)
+    public void deactivate(String email, String authHeader) {
+        String normalizedEmail = normalizeEmail(email);
+        String accessToken = extractAndValidateAccessToken(authHeader, normalizedEmail);
+
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         if(user.getUserStatus().equals(UserStatus.DEACTIVATED)){
@@ -273,6 +272,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         user.setUserStatus(UserStatus.DEACTIVATED);
         userRepository.save(user);
         refreshTokenRepository.deleteByUser(user);
+
+        Date expirationDate = jwtService.extractExpiration(accessToken);
+        redisTokenService.blacklistToken(accessToken, expirationDate.getTime());
+        SecurityContextHolder.clearContext();
     }
 
     @Override
@@ -357,9 +360,23 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     private String buildActivationLink(String rawToken) {
-        String baseUrl = accountReactivationProperties.getActivationBaseUrl();
-        String separator = baseUrl.contains("?") ? "&" : "?";
-        return baseUrl + separator + "token=" + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);
+        String baseUrl = frontendProperties.getBaseUrl();
+        String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+
+        return UriComponentsBuilder.fromUriString(normalizedBaseUrl)
+                .path("/reactivate-account")
+                .queryParam("token", rawToken)
+                .build()
+                .toUriString();
+    }
+
+    private boolean isEligibleForReactivation(User user) {
+        return user.getUserStatus() == UserStatus.DEACTIVATED;
+    }
+
+    private void sendReactivationEmail(User user) {
+        String reactivationLink = createReactivationLink(user);
+        emailService.sendAccountReactivationEmail(user.getEmail(), reactivationLink);
     }
 
     private String generateSecureToken() {
@@ -421,6 +438,29 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             return "";
         }
         return email.trim().toLowerCase();
+    }
+
+    private String extractAndValidateAccessToken(String authHeader, String authenticatedEmail) {
+        String normalizedEmail = normalizeEmail(authenticatedEmail);
+        if (normalizedEmail.isBlank()) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String accessToken = authHeader.substring(7);
+        if (!jwtService.isTokenStructurallyValid(accessToken)) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+        }
+
+        String tokenEmail = normalizeEmail(jwtService.extractUsername(accessToken));
+        if (!normalizedEmail.equals(tokenEmail)) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        return accessToken;
     }
 
     /*

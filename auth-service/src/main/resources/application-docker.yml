@@ -19,5 +19,5 @@ services:
     url: http://api-gateway:8090
 
 app:
-  account-reactivation:
-    activation-base-url: http://api-gateway:8090/api/v1/auth/reactivate-account
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}

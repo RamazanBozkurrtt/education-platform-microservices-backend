@@ -33,6 +33,8 @@ services:
     url: ${API_GATEWAY_URL}
   user-service:
     url: ${USER_SERVICE_URL}
+  enrollment-service:
+    url: ${ENROLLMENT_SERVICE_URL}
 
 app:
   internal:

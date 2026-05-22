@@ -10,6 +10,8 @@ services:
     url: ${COURSE_SERVICE_URL}
   enrollment-service:
     url: ${ENROLLMENT_SERVICE_URL}
+  payment-service:
+    url: ${PAYMENT_SERVICE_URL}
   review-service:
     url: ${REVIEW_SERVICE_URL}
 

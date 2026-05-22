@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package edubase.payment.v1;
+
+option java_package = "com.edubase.contracts.payment.v1";
+option java_multiple_files = true;
+option java_outer_classname = "PaymentQueryProto";
+
+service PaymentQueryService {
+  rpc HasSuccessfulPayment (SuccessfulPaymentRequest) returns (SuccessfulPaymentResponse);
+}
+
+message SuccessfulPaymentRequest {
+  int64 user_id = 1;
+  string course_id = 2;
+}
+
+message SuccessfulPaymentResponse {
+  bool has_successful_payment = 1;
+  int64 payment_id = 2;
+}
