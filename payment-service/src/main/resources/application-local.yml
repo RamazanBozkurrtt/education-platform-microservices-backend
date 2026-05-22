@@ -1,7 +1,9 @@
 server:
-  port: 8087
+  port: ${PAYMENT_SERVICE_PORT:8087}
 
 spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   datasource:
     url: jdbc:postgresql://localhost:5437/edubase_payment_db
     username: postgres
@@ -30,7 +32,7 @@ services:
 
 grpc:
   server:
-    port: 9095
+    port: ${PAYMENT_GRPC_PORT:9095}
   client:
     user:
       host: localhost

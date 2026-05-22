@@ -55,6 +55,10 @@ public class SecurityConfig {
             "/swagger-ui.html"
     };
 
+    private static final String[] INTERNAL_URLS = {
+            "/api/v1/internal/**"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -62,6 +66,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .requestMatchers(SWAGGER_URLS).permitAll()
+                        .requestMatchers(INTERNAL_URLS).permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception

@@ -467,7 +467,12 @@ public class CourseServiceImpl implements CourseService {
         if (categoryIds == null || categoryIds.isEmpty()) {
             return Map.of();
         }
-        return categoryRepository.findAllById(categoryIds).stream()
+        List<String> normalizedCategoryIds = categoryIds.stream()
+                .filter(this::hasText)
+                .map(String::trim)
+                .sorted()
+                .toList();
+        return categoryRepository.findAllById(normalizedCategoryIds).stream()
                 .collect(Collectors.toMap(Category::getId, this::toCategoryResponse));
     }
 

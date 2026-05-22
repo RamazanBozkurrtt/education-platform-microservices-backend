@@ -71,6 +71,9 @@ public class Payment extends BaseEntity {
     @Column(name = "idempotency_key", length = 64)
     private String idempotencyKey;
 
+    @Column(name = "failure_reason", length = 255)
+    private String failureReason;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 

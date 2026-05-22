@@ -28,6 +28,7 @@ public class PaymentResponse {
     private PaymentMethod paymentMethod;
     private String providerPaymentId;
     private String idempotencyKey;
+    private String failureReason;
     private String invoiceNumber;
     private LocalDateTime paidAt;
     private LocalDateTime refundedAt;

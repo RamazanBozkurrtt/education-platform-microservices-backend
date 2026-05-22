@@ -32,6 +32,8 @@ jwt:
 
 app:
   gateway-url: ${services.api-gateway.url}
+  internal:
+    api-key: ${INTERNAL_API_KEY}
   kafka:
     topics:
       enrollment-created: ${KAFKA_TOPIC_ENROLLMENT_CREATED:enrollment.created.v1}

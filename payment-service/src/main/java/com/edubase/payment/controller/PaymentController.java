@@ -2,6 +2,7 @@ package com.edubase.payment.controller;
 
 import com.edubase.commonCore.utils.RestResponse;
 import com.edubase.payment.controller.base.RestBaseController;
+import com.edubase.payment.dto.request.PaymentConfirmRequest;
 import com.edubase.payment.dto.request.PaymentCreateRequest;
 import com.edubase.payment.dto.request.PaymentStatusUpdateRequest;
 import com.edubase.payment.dto.response.CustomPageResponse;
@@ -61,6 +62,16 @@ public class PaymentController extends RestBaseController {
             @PathVariable Long id) {
         AuthContext authContext = authContextResolver.requireAuth(jwt);
         return ok(paymentService.getPaymentById(authContext, id));
+    }
+
+    @PostMapping("/{id}/confirm")
+    @Operation(summary = "Confirm payment", description = "Confirms or declines a pending payment (simulated gateway result).")
+    public ResponseEntity<RestResponse<PaymentResponse>> confirmPayment(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id,
+            @RequestBody @Valid PaymentConfirmRequest request) {
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ok(paymentService.confirmPayment(authContext, id, request));
     }
 
     @GetMapping("/me")

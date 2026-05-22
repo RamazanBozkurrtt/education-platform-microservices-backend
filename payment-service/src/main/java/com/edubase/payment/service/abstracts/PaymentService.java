@@ -1,6 +1,7 @@
 package com.edubase.payment.service.abstracts;
 
 import com.edubase.payment.dto.request.PaymentCreateRequest;
+import com.edubase.payment.dto.request.PaymentConfirmRequest;
 import com.edubase.payment.dto.request.PaymentStatusUpdateRequest;
 import com.edubase.payment.dto.response.CustomPageResponse;
 import com.edubase.payment.dto.response.InvoiceResponse;
@@ -12,6 +13,8 @@ public interface PaymentService {
     PaymentResponse createPayment(AuthContext authContext, PaymentCreateRequest request);
 
     PaymentResponse getPaymentById(AuthContext authContext, Long id);
+
+    PaymentResponse confirmPayment(AuthContext authContext, Long id, PaymentConfirmRequest request);
 
     CustomPageResponse<PaymentResponse> getMyPayments(AuthContext authContext, int pageNumber, int pageSize);
 

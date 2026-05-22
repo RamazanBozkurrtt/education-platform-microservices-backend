@@ -5,6 +5,7 @@ import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.commonCore.utils.TsidUtil;
 import com.edubase.payment.configuration.mapper.InvoiceMapper;
 import com.edubase.payment.configuration.mapper.PaymentMapper;
+import com.edubase.payment.dto.request.PaymentConfirmRequest;
 import com.edubase.payment.dto.request.PaymentCreateRequest;
 import com.edubase.payment.dto.request.PaymentStatusUpdateRequest;
 import com.edubase.payment.dto.response.CustomPageResponse;
@@ -89,11 +90,12 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setStatus(PaymentStatus.PENDING);
         payment.setProviderPaymentId("PAY-" + TsidUtil.generateId());
         payment.setIdempotencyKey(idempotencyKey);
+        payment.setFailureReason(null);
 
         Payment saved = paymentRepository.save(payment);
-        boolean autoConfirm = request.getAutoConfirm() == null || request.getAutoConfirm();
+        boolean autoConfirm = request.getAutoConfirm() != null && request.getAutoConfirm();
         if (autoConfirm) {
-            saved = markPaymentSucceeded(saved, request);
+            saved = markPaymentSucceeded(saved, toBillingDetails(request));
         }
         return toResponse(saved);
     }
@@ -103,6 +105,37 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse getPaymentById(AuthContext authContext, Long id) {
         Payment payment = paymentRepository.findById(id)
                 .orElseThrow(PaymentNotFoundException::new);
+        return toResponse(payment);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("@paymentSecurity.canAccessPayment(#authContext, #id)")
+    public PaymentResponse confirmPayment(AuthContext authContext, Long id, PaymentConfirmRequest request) {
+        Payment payment = paymentRepository.findById(id).orElseThrow(PaymentNotFoundException::new);
+        boolean approved = request == null || request.getApproved() == null || request.getApproved();
+
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
+            if (approved) {
+                return toResponse(payment);
+            }
+            throw new PaymentAlreadyCompletedException();
+        }
+        if (payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new PaymentAlreadyRefundedException();
+        }
+        if (payment.getStatus() == PaymentStatus.FAILED) {
+            if (!approved) {
+                return toResponse(payment);
+            }
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
+        }
+
+        if (approved) {
+            payment = markPaymentSucceeded(payment, toBillingDetails(request));
+        } else {
+            payment = markPaymentFailed(payment, request == null ? null : request.getFailureReason());
+        }
         return toResponse(payment);
     }
 
@@ -138,9 +171,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         switch (targetStatus) {
-            case SUCCEEDED -> payment = markPaymentSucceeded(payment, null);
+            case SUCCEEDED -> payment = markPaymentSucceeded(payment, BillingDetails.empty());
             case REFUNDED -> payment = markPaymentRefunded(payment);
-            case FAILED -> payment = markPaymentFailed(payment);
+            case FAILED -> payment = markPaymentFailed(payment, request.getFailureReason());
             case PENDING -> throw new BusinessException(ErrorCode.VALIDATION_ERROR);
         }
         return toResponse(payment);
@@ -155,7 +188,7 @@ public class PaymentServiceImpl implements PaymentService {
         return invoiceMapper.toResponseFromEntity(invoice);
     }
 
-    private Payment markPaymentSucceeded(Payment payment, PaymentCreateRequest createRequest) {
+    private Payment markPaymentSucceeded(Payment payment, BillingDetails billingDetails) {
         if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
             throw new PaymentAlreadyCompletedException();
         }
@@ -163,13 +196,14 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentAlreadyRefundedException();
         }
         if (payment.getStatus() == PaymentStatus.FAILED) {
-            throw new PaymentAlreadyCompletedException();
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
         }
 
         payment.setStatus(PaymentStatus.SUCCEEDED);
         payment.setPaidAt(LocalDateTime.now());
+        payment.setFailureReason(null);
         Payment saved = paymentRepository.save(payment);
-        Invoice invoice = createInvoiceIfAbsent(saved, createRequest);
+        Invoice invoice = createInvoiceIfAbsent(saved, billingDetails == null ? BillingDetails.empty() : billingDetails);
 
         applicationEventPublisher.publishEvent(new PaymentSucceededDomainEvent(
                 saved.getId(),
@@ -182,7 +216,7 @@ public class PaymentServiceImpl implements PaymentService {
         return saved;
     }
 
-    private Payment markPaymentFailed(Payment payment) {
+    private Payment markPaymentFailed(Payment payment, String failureReason) {
         if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
             throw new PaymentAlreadyCompletedException();
         }
@@ -190,6 +224,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentAlreadyRefundedException();
         }
         payment.setStatus(PaymentStatus.FAILED);
+        payment.setFailureReason(normalizeFailureReason(failureReason));
         return paymentRepository.save(payment);
     }
 
@@ -214,7 +249,7 @@ public class PaymentServiceImpl implements PaymentService {
         return saved;
     }
 
-    private Invoice createInvoiceIfAbsent(Payment payment, PaymentCreateRequest createRequest) {
+    private Invoice createInvoiceIfAbsent(Payment payment, BillingDetails billingDetails) {
         Invoice existing = invoiceRepository.findByPaymentId(payment.getId()).orElse(null);
         if (existing != null) {
             return existing;
@@ -224,10 +259,10 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentId(payment.getId())
                 .invoiceNumber("INV-" + TsidUtil.generateId())
                 .invoiceDate(LocalDateTime.now())
-                .buyerFullName(createRequest == null ? null : normalizeOptional(createRequest.getBuyerFullName()))
-                .buyerEmail(createRequest == null ? null : normalizeOptional(createRequest.getBuyerEmail()))
-                .buyerTaxNumber(createRequest == null ? null : normalizeOptional(createRequest.getBuyerTaxNumber()))
-                .buyerAddress(createRequest == null ? null : normalizeOptional(createRequest.getBuyerAddress()))
+                .buyerFullName(billingDetails.buyerFullName())
+                .buyerEmail(billingDetails.buyerEmail())
+                .buyerTaxNumber(billingDetails.buyerTaxNumber())
+                .buyerAddress(billingDetails.buyerAddress())
                 .courseTitleSnapshot(payment.getCourseTitleSnapshot())
                 .amount(payment.getAmount())
                 .currency(payment.getCurrency())
@@ -240,6 +275,35 @@ public class PaymentServiceImpl implements PaymentService {
         invoiceRepository.findByPaymentId(payment.getId())
                 .ifPresent(invoice -> response.setInvoiceNumber(invoice.getInvoiceNumber()));
         return response;
+    }
+
+    private BillingDetails toBillingDetails(PaymentCreateRequest request) {
+        if (request == null) {
+            return BillingDetails.empty();
+        }
+        return new BillingDetails(
+                normalizeOptional(request.getBuyerFullName()),
+                normalizeOptional(request.getBuyerEmail()),
+                normalizeOptional(request.getBuyerTaxNumber()),
+                normalizeOptional(request.getBuyerAddress())
+        );
+    }
+
+    private BillingDetails toBillingDetails(PaymentConfirmRequest request) {
+        if (request == null) {
+            return BillingDetails.empty();
+        }
+        return new BillingDetails(
+                normalizeOptional(request.getBuyerFullName()),
+                normalizeOptional(request.getBuyerEmail()),
+                normalizeOptional(request.getBuyerTaxNumber()),
+                normalizeOptional(request.getBuyerAddress())
+        );
+    }
+
+    private String normalizeFailureReason(String failureReason) {
+        String normalized = normalizeOptional(failureReason);
+        return normalized == null ? "Simulated gateway decline" : normalized;
     }
 
     private void requireAuthenticatedRole(AuthContext authContext) {
@@ -290,5 +354,16 @@ public class PaymentServiceImpl implements PaymentService {
     private String defaultIfBlank(String value, String fallback) {
         String normalized = normalizeOptional(value);
         return normalized == null ? fallback : normalized;
+    }
+
+    private record BillingDetails(
+            String buyerFullName,
+            String buyerEmail,
+            String buyerTaxNumber,
+            String buyerAddress
+    ) {
+        private static BillingDetails empty() {
+            return new BillingDetails(null, null, null, null);
+        }
     }
 }

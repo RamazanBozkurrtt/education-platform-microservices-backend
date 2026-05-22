@@ -28,6 +28,10 @@ services:
   course-service:
     url: http://localhost:8083
 
+app:
+  internal:
+    api-key: local-internal-api-key
+
 grpc:
   client:
     user:

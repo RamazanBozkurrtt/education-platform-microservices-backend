@@ -375,6 +375,7 @@ services:
       COURSE_GRPC_PORT: 9092
       PAYMENT_GRPC_HOST: payment-service
       PAYMENT_GRPC_PORT: 9095
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-internal-api-key}
       JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8084:8084"
