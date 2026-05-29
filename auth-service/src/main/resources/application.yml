@@ -35,6 +35,9 @@ app:
   password-reset:
     token-expiration: ${PASSWORD_RESET_TOKEN_EXPIRATION:15m}
   gmail:
+    enabled: ${GMAIL_ENABLED:true}
+    username: ${GMAIL_USERNAME:}
+    password: ${GMAIL_APP_PASSWORD:}
     keys-file: ${GMAIL_KEYS_FILE:keys.json}
   kafka:
     topics:

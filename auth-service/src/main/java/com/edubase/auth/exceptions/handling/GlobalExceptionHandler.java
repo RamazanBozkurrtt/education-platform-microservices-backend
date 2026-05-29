@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -118,6 +120,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(status)
                 .body(RestResponse.error(status.value(), "Bu islem icin yetkiniz yok"));
+    }
+
+    @ExceptionHandler(MailAuthenticationException.class)
+    public ResponseEntity<RestResponse<Object>> handleMailAuthException(MailAuthenticationException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_GATEWAY;
+        log.error("MAIL_AUTH_ERROR | Status: {} | Path: {} | Msg: {}",
+                status, request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(status)
+                .body(RestResponse.error(status.value(),
+                        "Mail servisi kimlik dogrulamasi basarisiz. Gmail app-password bilgisini kontrol edin."));
+    }
+
+    @ExceptionHandler(MailException.class)
+    public ResponseEntity<RestResponse<Object>> handleMailException(MailException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_GATEWAY;
+        log.error("MAIL_SEND_ERROR | Status: {} | Path: {} | Msg: {}",
+                status, request.getRequestURI(), ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(status)
+                .body(RestResponse.error(status.value(), "Mail servisine erisilemiyor. Lutfen daha sonra tekrar deneyin."));
     }
 
     @ExceptionHandler(Exception.class)

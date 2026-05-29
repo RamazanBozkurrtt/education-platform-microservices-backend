@@ -3,6 +3,7 @@ package com.edubase.course.service.concretes;
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
 import com.drew.imaging.mp4.Mp4MetadataReader;
+import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.mp4.Mp4Directory;
 import com.edubase.course.dto.response.VideoPlaybackUrlResponse;
@@ -44,6 +45,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
@@ -51,6 +53,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -67,6 +71,9 @@ public class CourseMediaServiceImpl implements CourseMediaService {
     private static final String LESSON_VIDEO_PUBLIC_SIGNED_PATH_TEMPLATE = "/courses/public/%s/lessons/%s/video";
     private static final long MIN_PLAYBACK_URL_TTL_SECONDS = 60L;
     private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final Pattern DURATION_UNITS_PATTERN = Pattern.compile(
+            "(\\d+(?:[\\.,]\\d+)?)\\s*(hours?|hrs?|hr|h|minutes?|mins?|min|m|seconds?|secs?|sec|s|milliseconds?|msecs?|msec|ms)"
+    );
     private static final List<String> SUPPORTED_IMAGE_EXTENSIONS = List.of("png", "jpg", "jpeg", "webp", "svg");
     private static final Set<String> SUPPORTED_IMAGE_CONTENT_TYPES = Set.of(
             "image/png",
@@ -260,10 +267,12 @@ public class CourseMediaServiceImpl implements CourseMediaService {
 
         if (role == UserRole.INSTRUCTOR) {
             boolean ownsCourse = courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull(courseId, authContext.userId());
-            if (!ownsCourse) {
-                throw new CourseNotFoundException();
+            if (ownsCourse) {
+                return courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
             }
-            return courseRepository.findByIdAndDeletedAtIsNull(courseId).orElseThrow(CourseNotFoundException::new);
+            // Instructors may also consume published courses as learners.
+            return courseRepository.findByIdAndStatusAndDeletedAtIsNull(courseId, CourseStatus.PUBLISHED)
+                    .orElseThrow(CourseNotFoundException::new);
         }
 
         return courseRepository.findByIdAndStatusAndDeletedAtIsNull(courseId, CourseStatus.PUBLISHED)
@@ -550,20 +559,30 @@ public class CourseMediaServiceImpl implements CourseMediaService {
 
     private Integer extractDurationSeconds(Metadata metadata) {
         Mp4Directory mp4Directory = metadata.getFirstDirectoryOfType(Mp4Directory.class);
+        Integer best = null;
         if (mp4Directory != null) {
-            Long durationSeconds = mp4Directory.getLongObject(Mp4Directory.TAG_DURATION_SECONDS);
-            if (durationSeconds != null && durationSeconds > 0 && durationSeconds <= Integer.MAX_VALUE) {
-                return durationSeconds.intValue();
-            }
             String durationDescription = mp4Directory.getDescription(Mp4Directory.TAG_DURATION);
             if (durationDescription != null) {
                 Integer parsedDuration = parseDurationDescription(durationDescription);
                 if (parsedDuration != null && parsedDuration > 0) {
-                    return parsedDuration;
+                    best = parsedDuration;
+                }
+            }
+            Long durationSeconds = mp4Directory.getLongObject(Mp4Directory.TAG_DURATION_SECONDS);
+            if (durationSeconds != null && durationSeconds > 0 && durationSeconds <= Integer.MAX_VALUE) {
+                int asInt = durationSeconds.intValue();
+                if (best == null || asInt > best) {
+                    best = asInt;
                 }
             }
         }
-        return null;
+
+        Integer discovered = extractBestDurationFromAllMetadataTags(metadata);
+        if (discovered != null && discovered > 0 && (best == null || discovered > best)) {
+            best = discovered;
+        }
+
+        return best;
     }
 
     private Integer parseDurationDescription(String value) {
@@ -572,49 +591,145 @@ public class CourseMediaServiceImpl implements CourseMediaService {
         }
 
         String normalized = value.trim().toLowerCase(Locale.ROOT);
-        if (normalized.endsWith(" seconds")) {
-            normalized = normalized.substring(0, normalized.length() - " seconds".length()).trim();
-        } else if (normalized.endsWith(" second")) {
-            normalized = normalized.substring(0, normalized.length() - " second".length()).trim();
-        } else if (normalized.endsWith(" secs")) {
-            normalized = normalized.substring(0, normalized.length() - " secs".length()).trim();
-        } else if (normalized.endsWith(" sec")) {
-            normalized = normalized.substring(0, normalized.length() - " sec".length()).trim();
-        } else if (normalized.endsWith(" s")) {
-            normalized = normalized.substring(0, normalized.length() - " s".length()).trim();
+
+        // ISO-8601 duration support (e.g. PT3M11.5S)
+        if (normalized.startsWith("p")) {
+            try {
+                long seconds = Duration.parse(normalized.toUpperCase(Locale.ROOT)).getSeconds();
+                if (seconds > 0 && seconds <= Integer.MAX_VALUE) {
+                    return (int) seconds;
+                }
+            } catch (Exception ignore) {
+                // Fall through to permissive parsing below.
+            }
         }
 
+        // Human-readable unit support (e.g. "3 min 11 sec", "191.2 seconds")
+        Integer unitDuration = parseDurationWithUnits(normalized);
+        if (unitDuration != null && unitDuration > 0) {
+            return unitDuration;
+        }
+
+        // HH:MM:SS and MM:SS support with optional fractional seconds on final segment.
+        Integer colonDuration = parseColonSeparatedDuration(normalized);
+        if (colonDuration != null && colonDuration > 0) {
+            return colonDuration;
+        }
+
+        // Plain numeric seconds support (e.g. "191", "191.2")
+        String numericToken = stripTrailingSecondUnits(normalized);
         try {
-            double numericSeconds = Double.parseDouble(normalized);
+            double numericSeconds = parseFlexibleDouble(numericToken);
             if (numericSeconds > 0 && numericSeconds <= Integer.MAX_VALUE) {
                 return (int) Math.round(numericSeconds);
             }
         } catch (NumberFormatException ignore) {
-            // Try HH:MM:SS parse below.
+            return null;
         }
 
+        return null;
+    }
+
+    private Integer parseDurationWithUnits(String normalized) {
+        Matcher matcher = DURATION_UNITS_PATTERN.matcher(normalized);
+        double totalSeconds = 0d;
+        boolean foundAny = false;
+        while (matcher.find()) {
+            double valuePart = parseFlexibleDouble(matcher.group(1));
+            String unit = matcher.group(2);
+            if (valuePart < 0) {
+                return null;
+            }
+            foundAny = true;
+            if (unit.startsWith("h")) {
+                totalSeconds += valuePart * 3600d;
+            } else if (unit.startsWith("m") && !"ms".equals(unit) && !"msec".equals(unit) && !"msecs".equals(unit) && !unit.startsWith("millisecond")) {
+                totalSeconds += valuePart * 60d;
+            } else if (unit.startsWith("s") || unit.startsWith("sec")) {
+                totalSeconds += valuePart;
+            } else {
+                totalSeconds += valuePart / 1000d;
+            }
+        }
+
+        if (!foundAny || totalSeconds <= 0d || totalSeconds > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) Math.round(totalSeconds);
+    }
+
+    private Integer parseColonSeparatedDuration(String normalized) {
         String[] parts = normalized.split(":");
         if (parts.length < 2 || parts.length > 3) {
             return null;
         }
 
         try {
-            long seconds = 0L;
-            for (String part : parts) {
-                String trimmedPart = part.trim();
-                long valuePart = Long.parseLong(trimmedPart);
+            double seconds = 0d;
+            for (int i = 0; i < parts.length; i++) {
+                String trimmedPart = parts[i].trim();
+                double valuePart = (i == parts.length - 1)
+                        ? parseFlexibleDouble(trimmedPart)
+                        : Long.parseLong(trimmedPart);
                 if (valuePart < 0) {
                     return null;
                 }
                 seconds = (seconds * 60) + valuePart;
             }
             if (seconds > 0 && seconds <= Integer.MAX_VALUE) {
-                return (int) seconds;
+                return (int) Math.round(seconds);
             }
             return null;
         } catch (NumberFormatException ignore) {
             return null;
         }
+    }
+
+    private String stripTrailingSecondUnits(String normalized) {
+        if (normalized.endsWith(" seconds")) {
+            return normalized.substring(0, normalized.length() - " seconds".length()).trim();
+        }
+        if (normalized.endsWith(" second")) {
+            return normalized.substring(0, normalized.length() - " second".length()).trim();
+        }
+        if (normalized.endsWith(" secs")) {
+            return normalized.substring(0, normalized.length() - " secs".length()).trim();
+        }
+        if (normalized.endsWith(" sec")) {
+            return normalized.substring(0, normalized.length() - " sec".length()).trim();
+        }
+        if (normalized.endsWith(" s")) {
+            return normalized.substring(0, normalized.length() - " s".length()).trim();
+        }
+        return normalized;
+    }
+
+    private double parseFlexibleDouble(String value) {
+        String normalized = value.trim();
+        if (normalized.indexOf(',') >= 0 && normalized.indexOf('.') < 0) {
+            normalized = normalized.replace(',', '.');
+        }
+        return Double.parseDouble(normalized);
+    }
+
+    private Integer extractBestDurationFromAllMetadataTags(Metadata metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        Integer best = null;
+        for (Directory directory : metadata.getDirectories()) {
+            for (var tag : directory.getTags()) {
+                String tagName = tag.getTagName();
+                if (tagName == null || !tagName.toLowerCase(Locale.ROOT).contains("duration")) {
+                    continue;
+                }
+                Integer candidate = parseDurationDescription(tag.getDescription());
+                if (candidate != null && candidate > 0 && (best == null || candidate > best)) {
+                    best = candidate;
+                }
+            }
+        }
+        return best;
     }
 
     private String extensionOf(String fileName) {

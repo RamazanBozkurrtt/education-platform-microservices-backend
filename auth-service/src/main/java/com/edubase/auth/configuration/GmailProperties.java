@@ -11,5 +11,8 @@ import org.springframework.stereotype.Component;
 @Setter
 public class GmailProperties {
 
+    private boolean enabled = true;
     private String keysFile = "keys.json";
+    private String username;
+    private String password;
 }

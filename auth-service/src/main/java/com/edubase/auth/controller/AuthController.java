@@ -15,9 +15,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -73,8 +77,87 @@ public class AuthController extends RestBaseController {
 
     @GetMapping("/reactivate-account")
     @Operation(summary = "Reactivate account", description = "Reactivates account using one-time token.")
-    public ResponseEntity<RestResponse<String>> reactivateAccount(@RequestParam("token") String token) {
-        return ok(authenticationService.reactivateAccount(token));
+    public ResponseEntity<RestResponse<String>> reactivateAccountGet(
+            @RequestParam Map<String, String> params
+    ) {
+        return ok(authenticationService.reactivateAccount(extractReactivationToken(params, null)));
+    }
+
+    @PostMapping(value = "/reactivate-account", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Reactivate account (JSON)", description = "Reactivates account using one-time token from JSON body or query parameter.")
+    public ResponseEntity<RestResponse<String>> reactivateAccountPostJson(
+            @RequestParam Map<String, String> params,
+            @RequestBody(required = false) Map<String, Object> body
+    ) {
+        return ok(authenticationService.reactivateAccount(extractReactivationToken(params, body)));
+    }
+
+    @PostMapping(value = "/reactivate-account", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    @Operation(summary = "Reactivate account (Form)", description = "Reactivates account using one-time token from form fields or query parameter.")
+    public ResponseEntity<RestResponse<String>> reactivateAccountPostForm(
+            @RequestParam Map<String, String> params
+    ) {
+        return ok(authenticationService.reactivateAccount(extractReactivationToken(params, null)));
+    }
+
+    @PostMapping(value = "/reactivate-account")
+    @Operation(summary = "Reactivate account (Fallback)", description = "Reactivates account using one-time token from query parameter.")
+    public ResponseEntity<RestResponse<String>> reactivateAccountPostFallback(
+            @RequestParam Map<String, String> params
+    ) {
+        return ok(authenticationService.reactivateAccount(extractReactivationToken(params, null)));
+    }
+
+    private String extractReactivationToken(Map<String, String> params, Map<String, Object> body) {
+        Map<String, String> candidates = new LinkedHashMap<>();
+        if (params != null) {
+            candidates.putAll(params);
+        }
+        if (body != null) {
+            putIfPresent(candidates, "token", body.get("token"));
+            putIfPresent(candidates, "reactivationToken", body.get("reactivationToken"));
+            putIfPresent(candidates, "reactivation_token", body.get("reactivation_token"));
+            putIfPresent(candidates, "value", body.get("value"));
+        }
+
+        String token = firstNonBlank(
+                candidates.get("token"),
+                candidates.get("reactivationToken"),
+                candidates.get("reactivation_token"),
+                candidates.get("value")
+        );
+
+        if (token != null) {
+            return token;
+        }
+
+        if (!candidates.isEmpty()) {
+            return candidates.values().stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        return null;
+    }
+
+    private void putIfPresent(Map<String, String> target, String key, Object rawValue) {
+        if (rawValue == null) {
+            return;
+        }
+        target.put(key, String.valueOf(rawValue));
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     @PostMapping("/logout")

@@ -4,6 +4,7 @@ import com.edubase.auth.configuration.GmailCredentialsProvider;
 import com.edubase.auth.service.abstracts.GmailMailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnProperty(prefix = "app.gmail", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class GmailMailServiceImpl implements GmailMailService {
 
     private static final String RESET_SUBJECT = "Reset your EduBase password";
