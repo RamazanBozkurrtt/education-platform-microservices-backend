@@ -1,6 +1,7 @@
 package com.edubase.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record ChangePasswordRequest(
@@ -8,7 +9,11 @@ public record ChangePasswordRequest(
         String oldPassword,
 
         @NotBlank(message = "Yeni sifre bos olamaz")
-        @Size(min = 6, message = "Yeni sifre en az 6 karakter olmali")
+        @Size(min = 8, message = "Yeni sifre en az 8 karakter olmali")
+        @Pattern(
+                regexp = "^(?=.*[a-z])(?=.*[A-Z]).{8,}$",
+                message = "Yeni sifre en az bir buyuk ve bir kucuk harf icermeli"
+        )
         String newPassword
 ) {
 }

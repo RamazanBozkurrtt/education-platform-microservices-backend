@@ -33,6 +33,7 @@ import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
 import com.edubase.course.service.abstracts.CourseMediaService;
 import com.edubase.course.service.abstracts.CourseService;
+import com.edubase.course.service.abstracts.finalexam.FinalExamPublishValidationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -72,6 +73,7 @@ public class CourseServiceImpl implements CourseService {
     private final InstructorProjectionService instructorProjectionService;
     private final InstructorProjectionReconciliationService reconciliationService;
     private final CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
+    private final FinalExamPublishValidationService finalExamPublishValidationService;
 
     @Override
     @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
@@ -270,6 +272,7 @@ public class CourseServiceImpl implements CourseService {
         if (!canPublish(course)) {
             throw new PublishValidationException();
         }
+        finalExamPublishValidationService.validateForPublishIfPresent(course.getId());
 
         course.setStatus(CourseStatus.PUBLISHED);
 

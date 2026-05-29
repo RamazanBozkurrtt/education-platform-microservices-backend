@@ -14,6 +14,7 @@ public enum ErrorCode {
     AUTH_TOKEN_IS_BLACKLISTED(1006, "Token blacklist'e alinmis.", 403),
     AUTH_REFRESH_TOKEN_CONFLICT(1007, "Refresh token zaten kullanilmis.", 409),
     AUTH_TOO_MANY_ATTEMPTS(1008, "Too many failed login attempts. Try again later.", 429),
+    AUTH_REACTIVATION_REQUIRED(1009, "Hesabiniz deaktif. Reactivation linki email adresinize gonderildi.", 403),
 
     // User
     USER_NOT_FOUND(2001, "Kullanici bulunamadi", 404),
@@ -34,6 +35,15 @@ public enum ErrorCode {
     COURSE_MEDIA_STORAGE_ERROR(7004, "Medya depolama hatasi olustu", 500),
     COURSE_CATEGORY_NOT_FOUND(7005, "Course category not found", 404),
     COURSE_LEVEL_NOT_FOUND(7006, "Course level not found", 404),
+    FINAL_EXAM_NOT_FOUND(7010, "Final exam not found", 404),
+    FINAL_EXAM_NOT_ACTIVE(7011, "Final exam is not active", 400),
+    FINAL_EXAM_ATTEMPTS_EXHAUSTED(7012, "Final exam attempts exhausted", 409),
+    FINAL_EXAM_ACTIVE_ATTEMPT_EXISTS(7013, "Active final exam attempt already exists", 409),
+    FINAL_EXAM_ATTEMPT_NOT_FOUND(7014, "Final exam attempt not found", 404),
+    FINAL_EXAM_ATTEMPT_INVALID_STATE(7015, "Final exam attempt state is invalid for this operation", 409),
+    FINAL_EXAM_COURSE_NOT_COMPLETED(7016, "Course is not completed for final exam", 403),
+    FINAL_EXAM_NOT_READY(7017, "Final exam is not ready for student attempts", 400),
+    FINAL_EXAM_ALREADY_EXISTS(7018, "Active final exam already exists for course", 409),
 
     ENROLLMENT_NOT_FOUND(8001, "Enrollment not found", 404),
     ENROLLMENT_ALREADY_EXISTS(8002, "Enrollment already exists", 409),

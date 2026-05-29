@@ -2,6 +2,7 @@ package com.edubase.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -13,7 +14,11 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message = "Şifre boş olamaz")
-    @Size(min = 6, message = "Şifre en az 6 karakter olmalıdır")
+    @Size(min = 8, message = "Şifre en az 8 karakter olmalıdır")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z]).{8,}$",
+            message = "Şifre en az bir büyük ve bir küçük harf içermelidir"
+    )
     private String password;
 
 }

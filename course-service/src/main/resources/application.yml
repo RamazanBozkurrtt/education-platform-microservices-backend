@@ -53,6 +53,7 @@ course:
   media:
     base-path: ${COURSE_MEDIA_BASE_PATH:videos}
     image-base-path: ${COURSE_IMAGE_BASE_PATH:images/courses}
+    exam-image-base-path: ${COURSE_EXAM_IMAGE_BASE_PATH:images/final-exams}
     playback-signing-key: ${COURSE_MEDIA_PLAYBACK_SIGNING_KEY:${JWT_SECRET}}
     playback-url-ttl-seconds: ${COURSE_MEDIA_PLAYBACK_URL_TTL_SECONDS:900}
     minio:

@@ -1,0 +1,29 @@
+{
+  "kafka": {
+    "internal-keys" : {
+      "course-service" : {
+        "key" : "course-service-aaPiKKee-y",
+        "encrypted" : "b8aa65cee3bb24552d0c5d94c68cb51d39c52751ac2c32add5507180084fb25f"
+      },
+      "user-service" : {
+        "key" : "user-service-ttiitihhs-AppiKe-yy",
+        "encrypted" : "ef5c64f472b8a88f6cf88badfb63e30b7253b47fe57f7d8ca762b857d97b9623"
+      }
+    }
+  },
+  "minio" : {
+    "user" : {
+      "key" : "eeeDuBasseeEMiiiiIIniOO00UserNnnAmeffor",
+      "encrypted" : "d743d845a53e5e652620847b0e8fd6208ca5d23865919b8cc9bb8fb6e66959bd"
+    },
+    "password" : {
+      "key" : "eDuubasssEemiIIniOoAAAaaAddmMinkey",
+      "encrypted" : "c68aa814576d1fd9c2778ffdb2c929cca6f8c4a518dd40a7236d2c630f9ca5e6"
+    }
+  },
+  "gmail": {
+    "username": "EduBaseSup@gmail.com",
+    "app-password": "qdqa hxxg ndwf eibm",
+    "account-password": "12345678915651068rB."
+  }
+}

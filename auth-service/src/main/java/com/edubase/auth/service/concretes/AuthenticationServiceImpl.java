@@ -36,6 +36,7 @@ import org.springframework.util.StopWatch;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -59,8 +60,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private static final Duration LOGIN_BLOCK_DURATION = Duration.ofMinutes(2);
     private static final String LOGIN_FAIL_PREFIX = "login:fail:";
     private static final String LOGIN_BLOCK_PREFIX = "login:block:";
-    private static final String REACTIVATION_REQUEST_MESSAGE =
-            "If an account exists and is eligible for reactivation, a reactivation link has been sent.";
+    private static final String REACTIVATION_SUCCESS_MESSAGE =
+            "Hesabiniz tekrar aktif edildi. Simdi giris yapabilirsiniz.";
+    private static final String REACTIVATION_ALREADY_ACTIVE_MESSAGE =
+            "Hesabiniz zaten aktif. Giris yapabilirsiniz.";
 
     private final JwtService jwtService;
     private final RefreshTokenRepository  refreshTokenRepository;
@@ -105,7 +108,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
 
     //LOGIN
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         StopWatch stopWatch = new StopWatch("auth-login");
         stopWatch.start("normalize-email");
@@ -153,7 +156,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             log.info("Login converted to reactivation. totalMs={} breakdown={}",
                     stopWatch.getTotalTimeMillis(),
                     stopWatch.prettyPrint());
-            return AuthenticationResponse.forReactivationRequired(REACTIVATION_REQUEST_MESSAGE);
+            throw new BusinessException(ErrorCode.AUTH_REACTIVATION_REQUIRED);
         }
 
         if (user.isLocked()) {
@@ -222,19 +225,30 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Override
     @Transactional
     public String reactivateAccount(String token) {
-        if (token == null || token.isBlank()) {
+        String normalizedToken = normalizeReactivationToken(token);
+
+        var tokenHash = hashToken(normalizedToken);
+        var reactivationToken = accountReactivationTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> {
+                    log.warn("Reactivation token not found. tokenLength={} tokenHashPrefix={}",
+                            normalizedToken.length(), tokenHash.substring(0, Math.min(12, tokenHash.length())));
+                    return new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+                });
+
+        User user = reactivationToken.getUser();
+
+        if (reactivationToken.isUsed()) {
+            if (user.getUserStatus() == UserStatus.ACTUAL) {
+                log.info("Reactivation token already consumed; user already active. userId={}", user.getId());
+                return REACTIVATION_ALREADY_ACTIVE_MESSAGE;
+            }
             throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
         }
-
-        var tokenHash = hashToken(token);
-        var reactivationToken = accountReactivationTokenRepository.findByTokenHashAndUsedFalse(tokenHash)
-                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE));
 
         if (reactivationToken.getExpiresAt().isBefore(Instant.now())) {
             throw new BusinessException(ErrorCode.AUTH_TOKEN_EXPIRED);
         }
 
-        User user = reactivationToken.getUser();
         user.setUserStatus(UserStatus.ACTUAL);
         userRepository.save(user);
 
@@ -242,7 +256,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         reactivationToken.setUsedAt(Instant.now());
         accountReactivationTokenRepository.save(reactivationToken);
 
-        return "Hesabiniz tekrar aktif edildi. Simdi giris yapabilirsiniz.";
+        log.info("Account reactivated successfully. userId={}", user.getId());
+        return REACTIVATION_SUCCESS_MESSAGE;
     }
 
     @Override
@@ -392,6 +407,88 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             return BASE64_URL_ENCODER.encodeToString(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algoritmasi bulunamadi", e);
+        }
+    }
+
+    private String normalizeReactivationToken(String providedToken) {
+        if (!StringUtils.hasText(providedToken)) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+        }
+
+        String candidate = providedToken.trim();
+        if (candidate.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            candidate = candidate.substring(7).trim();
+        }
+
+        candidate = stripWrappingQuotes(candidate);
+        candidate = urlDecodeSafely(candidate);
+
+        String tokenFromCandidate = extractTokenFromTokenLikeValue(candidate);
+        if (StringUtils.hasText(tokenFromCandidate)) {
+            candidate = tokenFromCandidate.trim();
+        }
+
+        candidate = stripWrappingQuotes(candidate).trim();
+        if (!StringUtils.hasText(candidate)
+                || "undefined".equalsIgnoreCase(candidate)
+                || "null".equalsIgnoreCase(candidate)) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_SIGNATURE);
+        }
+
+        return candidate;
+    }
+
+    private String extractTokenFromTokenLikeValue(String candidate) {
+        if (!StringUtils.hasText(candidate)) {
+            return null;
+        }
+
+        try {
+            String parsed = UriComponentsBuilder
+                    .fromUriString(candidate)
+                    .build()
+                    .getQueryParams()
+                    .getFirst("token");
+            if (StringUtils.hasText(parsed)) {
+                return parsed;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // candidate may not be a full URL
+        }
+
+        if (candidate.startsWith("token=")) {
+            return candidate.substring("token=".length());
+        }
+
+        if (candidate.contains("&")) {
+            for (String part : candidate.split("&")) {
+                if (part.startsWith("token=")) {
+                    return part.substring("token=".length());
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String stripWrappingQuotes(String value) {
+        if (!StringUtils.hasText(value) || value.length() < 2) {
+            return value;
+        }
+        if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
+    }
+
+    private String urlDecodeSafely(String value) {
+        if (!StringUtils.hasText(value) || !value.contains("%")) {
+            return value;
+        }
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return value;
         }
     }
 

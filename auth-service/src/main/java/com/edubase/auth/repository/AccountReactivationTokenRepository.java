@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface AccountReactivationTokenRepository extends JpaRepository<AccountReactivationToken, Long> {
 
-    Optional<AccountReactivationToken> findByTokenHashAndUsedFalse(String tokenHash);
+    Optional<AccountReactivationToken> findByTokenHash(String tokenHash);
 
     @Modifying
     void deleteByUser(User user);

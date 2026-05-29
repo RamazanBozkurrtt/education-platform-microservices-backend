@@ -1,12 +1,15 @@
 package com.edubase.course.service;
 
 import com.edubase.course.entity.Course;
+import com.edubase.course.entity.CourseStatus;
 import com.edubase.course.entity.Lesson;
 import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
 import com.edubase.course.service.concretes.CourseMediaServiceImpl;
+import com.drew.metadata.Metadata;
+import com.drew.metadata.mp4.Mp4Directory;
 import io.minio.MinioClient;
 import io.minio.StatObjectResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -184,5 +187,56 @@ class CourseMediaServiceImplTest {
         assertEquals("bytes 0-1023/5000", response.getHeaders().getFirst(HttpHeaders.CONTENT_RANGE));
         assertEquals(1024L, response.getHeaders().getContentLength());
         assertNotNull(response.getBody());
+    }
+
+    @Test
+    void getLessonVideo_whenInstructorIsNotOwner_allowsPublishedCourseAsLearner() throws Exception {
+        Lesson lesson = Lesson.builder().id("lesson-1").build();
+        Course course = Course.builder()
+                .id("course-1")
+                .instructorId("course-owner")
+                .status(CourseStatus.PUBLISHED)
+                .lessons(List.of(lesson))
+                .build();
+        AuthContext authContext = new AuthContext("other-instructor", UserRole.INSTRUCTOR);
+        HttpHeaders headers = new HttpHeaders();
+        StatObjectResponse stat = mock(StatObjectResponse.class);
+
+        when(courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull("course-1", "other-instructor")).thenReturn(false);
+        when(courseRepository.findByIdAndStatusAndDeletedAtIsNull("course-1", CourseStatus.PUBLISHED))
+                .thenReturn(Optional.of(course));
+        when(minioClient.statObject(any())).thenReturn(stat);
+        when(stat.size()).thenReturn(10_000L);
+
+        ResponseEntity<Resource> response = courseMediaService.getLessonVideo(authContext, "course-1", "lesson-1", headers);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("bytes", response.getHeaders().getFirst(HttpHeaders.ACCEPT_RANGES));
+        assertEquals(10_000L, response.getHeaders().getContentLength());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void parseDurationDescription_shouldParseMinuteSecondFormatWithFraction() {
+        Integer parsed = ReflectionTestUtils.invokeMethod(courseMediaService, "parseDurationDescription", "00:03:11.200");
+        assertEquals(191, parsed);
+    }
+
+    @Test
+    void parseDurationDescription_shouldParseHumanReadableUnits() {
+        Integer parsed = ReflectionTestUtils.invokeMethod(courseMediaService, "parseDurationDescription", "3 min 11 sec");
+        assertEquals(191, parsed);
+    }
+
+    @Test
+    void extractDurationSeconds_shouldPreferRicherDurationOverOneSecondFallback() {
+        Metadata metadata = new Metadata();
+        Mp4Directory directory = new Mp4Directory();
+        directory.setString(Mp4Directory.TAG_DURATION, "00:03:11.000");
+        directory.setLong(Mp4Directory.TAG_DURATION_SECONDS, 1L);
+        metadata.addDirectory(directory);
+
+        Integer parsed = ReflectionTestUtils.invokeMethod(courseMediaService, "extractDurationSeconds", metadata);
+        assertEquals(191, parsed);
     }
 }

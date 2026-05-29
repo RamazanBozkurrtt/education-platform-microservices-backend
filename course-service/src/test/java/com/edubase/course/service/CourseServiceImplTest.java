@@ -26,6 +26,7 @@ import com.edubase.course.service.abstracts.CourseMediaService;
 import com.edubase.course.service.concretes.CourseServiceImpl;
 import com.edubase.course.service.concretes.InstructorProjectionReconciliationService;
 import com.edubase.course.service.concretes.InstructorProjectionService;
+import com.edubase.course.service.abstracts.finalexam.FinalExamPublishValidationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -77,6 +78,9 @@ class CourseServiceImplTest {
 
     @Mock
     private CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
+
+    @Mock
+    private FinalExamPublishValidationService finalExamPublishValidationService;
 
     @InjectMocks
     private CourseServiceImpl courseService;
