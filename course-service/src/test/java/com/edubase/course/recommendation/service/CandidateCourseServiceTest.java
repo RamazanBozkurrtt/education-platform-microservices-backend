@@ -9,6 +9,7 @@ import com.edubase.course.recommendation.model.UserRecommendationProfile;
 import com.edubase.course.repository.CategoryRepository;
 import com.edubase.course.repository.CourseLevelRepository;
 import com.edubase.course.repository.CourseRepository;
+import com.edubase.course.service.concretes.EnrollmentAccessClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,13 +36,21 @@ class CandidateCourseServiceTest {
     @Mock
     private CourseLevelRepository courseLevelRepository;
 
+    @Mock
+    private EnrollmentAccessClient enrollmentAccessClient;
+
     private CandidateCourseService candidateCourseService;
 
     @BeforeEach
     void setUp() {
         RecommendationServiceProperties properties = new RecommendationServiceProperties();
         properties.setCandidateLimit(10);
-        candidateCourseService = new CandidateCourseService(courseRepository, categoryRepository, courseLevelRepository, properties);
+        candidateCourseService = new CandidateCourseService(
+                courseRepository,
+                categoryRepository,
+                courseLevelRepository,
+                properties,
+                enrollmentAccessClient);
     }
 
     @Test
@@ -79,6 +88,7 @@ class CandidateCourseServiceTest {
         assertEquals(2, candidates.size());
         assertEquals(300L, findByCourseId(candidates, "course-1").getDurationSeconds());
         assertEquals(0L, findByCourseId(candidates, "course-2").getDurationSeconds());
+        assertEquals(0L, findByCourseId(candidates, "course-1").getEnrollmentCount());
     }
 
     private CandidateCourseData findByCourseId(List<CandidateCourseData> candidates, String courseId) {

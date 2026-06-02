@@ -36,6 +36,7 @@ public class FallbackRecommendationService {
                         .durationSeconds(candidate.getDurationSeconds())
                         .lessonCount(candidate.getLessonCount())
                         .rating(candidate.getRating())
+                        .studentsCount(safeLong(candidate.getEnrollmentCount()))
                         .thumbnailUrl(candidate.getThumbnailUrl())
                         .score(normalizeScore(candidate))
                         .reason(FALLBACK_REASON)
@@ -84,5 +85,9 @@ public class FallbackRecommendationService {
         }
         badges.add("Recommended");
         return badges.stream().distinct().limit(3).toList();
+    }
+
+    private long safeLong(Long value) {
+        return value == null || value < 0L ? 0L : value;
     }
 }

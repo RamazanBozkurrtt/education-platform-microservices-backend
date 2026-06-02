@@ -8,6 +8,7 @@ import com.edubase.course.configuration.mapper.LessonMapper;
 import com.edubase.course.dto.request.CourseCreateRequest;
 import com.edubase.course.dto.request.CourseUpdateRequest;
 import com.edubase.course.dto.request.LessonCreateRequest;
+import com.edubase.course.dto.request.LessonUpdateRequest;
 import com.edubase.course.dto.response.CourseResponse;
 import com.edubase.course.dto.response.CustomPageResponse;
 import com.edubase.course.dto.response.InstructorSummaryResponse;
@@ -24,6 +25,7 @@ import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
 import com.edubase.course.service.abstracts.CourseMediaService;
 import com.edubase.course.service.concretes.CourseServiceImpl;
+import com.edubase.course.service.concretes.EnrollmentAccessClient;
 import com.edubase.course.service.concretes.InstructorProjectionReconciliationService;
 import com.edubase.course.service.concretes.InstructorProjectionService;
 import com.edubase.course.service.abstracts.finalexam.FinalExamPublishValidationService;
@@ -81,6 +83,9 @@ class CourseServiceImplTest {
 
     @Mock
     private FinalExamPublishValidationService finalExamPublishValidationService;
+
+    @Mock
+    private EnrollmentAccessClient enrollmentAccessClient;
 
     @InjectMocks
     private CourseServiceImpl courseService;
@@ -309,6 +314,37 @@ class CourseServiceImplTest {
         assertEquals("course-5", result.getId());
         assertEquals(1, course.getLessons().size());
         assertNotNull(course.getLessons().get(0).getId());
+        assertEquals(120, course.getLessons().get(0).getDuration());
+    }
+
+    @Test
+    void updateLesson_shouldPersistRequestDurationWhenProvided() {
+        Lesson lesson = Lesson.builder()
+                .id("lesson-5")
+                .title("Old")
+                .summaryTitle("Old Summary")
+                .duration(90)
+                .videoUrl("/video")
+                .orderIndex(0)
+                .build();
+        Course course = Course.builder()
+                .id("course-5")
+                .instructorId("5")
+                .lessons(new ArrayList<>(List.of(lesson)))
+                .build();
+        LessonUpdateRequest request = new LessonUpdateRequest("Lesson", "Lesson Intro", null, 240, 0, false);
+        CourseResponse response = CourseResponse.builder().id("course-5").build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-5")).thenReturn(Optional.of(course));
+        when(courseRepository.save(course)).thenReturn(course);
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(response);
+
+        AuthContext authContext = new AuthContext("5", UserRole.INSTRUCTOR);
+        CourseResponse result = courseService.updateLesson(authContext, "course-5", "lesson-5", request);
+
+        assertEquals("course-5", result.getId());
+        assertEquals(240, course.getLessons().get(0).getDuration());
+        assertEquals("/video", course.getLessons().get(0).getVideoUrl());
     }
 
     @Test
@@ -351,6 +387,30 @@ class CourseServiceImplTest {
     }
 
     @Test
+    void getPublicCourseById_shouldIncludeStudentsCount() {
+        Course course = Course.builder()
+                .id("course-detail")
+                .status(CourseStatus.PUBLISHED)
+                .lessons(new ArrayList<>())
+                .build();
+        CourseResponse mapped = CourseResponse.builder()
+                .id("course-detail")
+                .build();
+
+        when(courseRepository.findByIdAndStatusAndDeletedAtIsNull("course-detail", CourseStatus.PUBLISHED))
+                .thenReturn(Optional.of(course));
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(mapped);
+        when(enrollmentAccessClient.countSuccessfulEnrollmentsByCourseIds(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of("course-detail", 7L));
+
+        CourseResponse result = courseService.getPublicCourseById("course-detail");
+
+        assertNotNull(result);
+        assertEquals("course-detail", result.getId());
+        assertEquals(7L, result.getStudentsCount());
+    }
+
+    @Test
     void getPublicCourses_shouldHandleMissingLevelId() {
         Course course = Course.builder()
                 .id("course-8")
@@ -374,6 +434,8 @@ class CourseServiceImplTest {
                 .thenReturn(List.of(new Category("cat-1", "Category", null, null)));
         when(instructorProjectionService.findSummariesByInstructorIds(org.mockito.ArgumentMatchers.anyCollection()))
                 .thenReturn(java.util.Map.of());
+        when(enrollmentAccessClient.countSuccessfulEnrollmentsByCourseIds(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of("course-8", 3L));
 
         CustomPageResponse<CourseResponse> result = courseService.getPublicCourses(0, 50);
 
@@ -384,6 +446,7 @@ class CourseServiceImplTest {
         assertEquals(0, result.getContent().get(0).getDuration());
         assertEquals(0, result.getContent().get(0).getDurationSeconds());
         assertEquals(0, result.getContent().get(0).getTotalDurationSeconds());
+        assertEquals(3L, result.getContent().get(0).getStudentsCount());
     }
 
     @Test
@@ -467,5 +530,42 @@ class CourseServiceImplTest {
         assertEquals(120, result.getContent().get(0).getTotalDurationSeconds());
         assertEquals(0, result.getContent().get(0).getLessons().get(1).getDuration());
         assertEquals(0, result.getContent().get(0).getLessons().get(1).getDurationSeconds());
+    }
+
+    @Test
+    void getPublicCourses_shouldKeepLongButReasonableManualDurations() {
+        int sixWeeksSeconds = 6 * 7 * 24 * 60 * 60;
+        Course course = Course.builder()
+                .id("course-11")
+                .status(CourseStatus.PUBLISHED)
+                .instructorId("inst-11")
+                .categoryIds(List.of("cat-1"))
+                .lessons(new ArrayList<>())
+                .build();
+        CourseResponse mapped = CourseResponse.builder()
+                .id("course-11")
+                .instructorId("inst-11")
+                .categoryIds(List.of("cat-1"))
+                .lessons(List.of(LessonResponse.builder().id("l1").duration(sixWeeksSeconds).build()))
+                .build();
+
+        when(courseRepository.findAllByStatusAndDeletedAtIsNull(
+                org.mockito.ArgumentMatchers.eq(CourseStatus.PUBLISHED),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new PageImpl<>(List.of(course)));
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(mapped);
+        when(categoryRepository.findAllById(List.of("cat-1")))
+                .thenReturn(List.of(new Category("cat-1", "Category", null, null)));
+        when(instructorProjectionService.findSummariesByInstructorIds(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of());
+
+        CustomPageResponse<CourseResponse> result = courseService.getPublicCourses(0, 50);
+
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals(sixWeeksSeconds, result.getContent().get(0).getDuration());
+        assertEquals(sixWeeksSeconds, result.getContent().get(0).getDurationSeconds());
+        assertEquals(sixWeeksSeconds, result.getContent().get(0).getTotalDurationSeconds());
+        assertEquals(sixWeeksSeconds, result.getContent().get(0).getLessons().get(0).getDurationSeconds());
     }
 }

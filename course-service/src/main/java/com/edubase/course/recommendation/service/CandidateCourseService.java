@@ -9,6 +9,7 @@ import com.edubase.course.recommendation.model.UserRecommendationProfile;
 import com.edubase.course.repository.CategoryRepository;
 import com.edubase.course.repository.CourseLevelRepository;
 import com.edubase.course.repository.CourseRepository;
+import com.edubase.course.service.concretes.EnrollmentAccessClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -36,6 +37,7 @@ public class CandidateCourseService {
     private final CategoryRepository categoryRepository;
     private final CourseLevelRepository courseLevelRepository;
     private final RecommendationServiceProperties properties;
+    private final EnrollmentAccessClient enrollmentAccessClient;
 
     public List<CandidateCourseData> buildCandidates(UserRecommendationProfile profile, String query) {
         int candidateLimit = Math.max(1, properties.getCandidateLimit());
@@ -50,6 +52,15 @@ public class CandidateCourseService {
 
         Map<String, String> categoryNamesById = resolveCategoryNames(courses);
         Map<String, String> levelNamesById = resolveLevelNames(courses);
+        Map<String, Long> enrollmentCountsByCourseId = enrollmentAccessClient.countSuccessfulEnrollmentsByCourseIds(
+                courses.stream()
+                        .map(Course::getId)
+                        .filter(this::hasText)
+                        .collect(Collectors.toCollection(LinkedHashSet::new))
+        );
+        if (enrollmentCountsByCourseId == null) {
+            enrollmentCountsByCourseId = Map.of();
+        }
         Set<String> completedCourseIds = new HashSet<>(safeList(profile.getCompletedCourseIds()));
 
         List<CandidateCourseData> candidates = new ArrayList<>();
@@ -71,7 +82,7 @@ public class CandidateCourseService {
                     .durationSeconds(calculateDurationSeconds(course))
                     .lessonCount(countLessons(course))
                     .rating(0.0d)
-                    .enrollmentCount(0L)
+                    .enrollmentCount(resolveEnrollmentCount(enrollmentCountsByCourseId, course.getId()))
                     .createdAt(course.getCreatedAt())
                     .thumbnailUrl(DEFAULT_THUMBNAIL_TEMPLATE.formatted(course.getId()))
                     .build());
@@ -259,6 +270,17 @@ public class CandidateCourseService {
             if (lesson != null) {
                 count++;
             }
+        }
+        return count;
+    }
+
+    private long resolveEnrollmentCount(Map<String, Long> counts, String courseId) {
+        if (counts == null || !hasText(courseId)) {
+            return 0L;
+        }
+        Long count = counts.get(courseId);
+        if (count == null || count < 0L) {
+            return 0L;
         }
         return count;
     }
