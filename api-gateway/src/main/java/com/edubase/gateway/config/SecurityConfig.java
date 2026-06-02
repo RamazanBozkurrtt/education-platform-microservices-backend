@@ -68,7 +68,15 @@ public class SecurityConfig {
     };
 
     private static final String[] PUBLIC_PATHS = {
-            "/api/v1/auth/**",
+            "/api/v1/auth/register",
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh-token",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/reset-password",
+            "/api/v1/auth/reset-password/**",
+            "/api/v1/auth/password-reset/**",
+            "/api/v1/auth/reactivate-account",
+            "/api/v1/auth/reactivate-account/request",
             "/api/v1/users/public/**",
             "/courses/public/**",
             "/api/v1/courses/public/**",

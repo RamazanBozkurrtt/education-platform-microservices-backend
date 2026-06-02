@@ -59,7 +59,26 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new BusinessException(ErrorCode.USER_PASSWORD_MISMATCH);
         }
 
-        String tokenHash = hashToken(rawToken);
+        PasswordResetToken token = getValidResetToken(rawToken);
+
+        User user = token.getUser();
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        refreshTokenRepository.deleteByUser(user);
+
+        token.setUsedAt(Instant.now());
+        passwordResetTokenRepository.save(token);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void validateResetToken(String rawToken) {
+        getValidResetToken(rawToken);
+    }
+
+    private PasswordResetToken getValidResetToken(String rawToken) {
+        String normalizedToken = normalizeResetToken(rawToken);
+        String tokenHash = hashToken(normalizedToken);
         PasswordResetToken token = passwordResetTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_PASSWORD_RESET_TOKEN_INVALID));
 
@@ -77,12 +96,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new BusinessException(ErrorCode.USER_REACTIVATION_REQUIRED_FOR_PASSWORD_RESET);
         }
 
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
-        refreshTokenRepository.deleteByUser(user);
-
-        token.setUsedAt(now);
-        passwordResetTokenRepository.save(token);
+        return token;
     }
 
     private void createAndSendResetToken(User user) {
@@ -131,6 +145,21 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm is unavailable.", e);
         }
+    }
+
+    private String normalizeResetToken(String rawToken) {
+        if (rawToken == null) {
+            throw new BusinessException(ErrorCode.USER_PASSWORD_RESET_TOKEN_INVALID);
+        }
+
+        String normalizedToken = rawToken.trim();
+        if (normalizedToken.isBlank()
+                || "undefined".equalsIgnoreCase(normalizedToken)
+                || "null".equalsIgnoreCase(normalizedToken)) {
+            throw new BusinessException(ErrorCode.USER_PASSWORD_RESET_TOKEN_INVALID);
+        }
+
+        return normalizedToken;
     }
 
     private String normalizeEmail(String email) {

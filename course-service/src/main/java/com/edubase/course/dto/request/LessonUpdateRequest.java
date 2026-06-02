@@ -27,7 +27,6 @@ public class LessonUpdateRequest {
     @Size(max = 1000, message = "Video URL must be at most 1000 characters")
     private String videoUrl;
 
-    @NotNull(message = "Duration is required")
     @Positive(message = "Duration must be positive")
     private Integer duration;
 

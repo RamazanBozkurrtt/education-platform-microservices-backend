@@ -3,6 +3,7 @@ package com.edubase.course.service;
 import com.edubase.commonCore.exceptions.BusinessException;
 import com.edubase.commonCore.exceptions.ErrorCode;
 import com.edubase.course.dto.request.LessonProgressUpdateRequest;
+import com.edubase.course.dto.response.CourseProgressSummaryResponse;
 import com.edubase.course.dto.response.LessonProgressResponse;
 import com.edubase.course.entity.Course;
 import com.edubase.course.entity.CourseStatus;
@@ -78,6 +79,7 @@ class LessonProgressServiceImplTest {
 
         LessonProgressResponse response = lessonProgressService.updateLessonProgress(authContext, "course-1", "lesson-1", request);
 
+        assertEquals(600, response.getDurationSeconds());
         assertEquals(120, response.getLastWatchedSecond());
         assertEquals(new BigDecimal("20.00"), response.getWatchedPercentage());
         assertFalse(response.isCompleted());
@@ -118,6 +120,33 @@ class LessonProgressServiceImplTest {
     }
 
     @Test
+    void shouldIgnoreClientSuppliedVideoDurationAndUseBackendLessonDuration() {
+        Course course = Course.builder()
+                .id("course-1")
+                .status(CourseStatus.PUBLISHED)
+                .lessons(List.of(Lesson.builder().id("lesson-1").duration(300).build()))
+                .build();
+        AuthContext authContext = new AuthContext("42", UserRole.USER);
+        LessonProgressUpdateRequest request = LessonProgressUpdateRequest.builder()
+                .lastWatchedSecond(150)
+                .videoDurationSecond(600)
+                .build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-1")).thenReturn(Optional.of(course));
+        when(enrollmentAccessClient.hasActiveEnrollment("42", "course-1")).thenReturn(true);
+        when(lessonProgressRepository.findByUserIdAndCourseIdAndLessonId("42", "course-1", "lesson-1"))
+                .thenReturn(Optional.empty());
+        when(lessonProgressRepository.save(any(LessonProgress.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonProgressResponse response = lessonProgressService.updateLessonProgress(authContext, "course-1", "lesson-1", request);
+
+        assertEquals(300, response.getDurationSeconds());
+        assertEquals(150, response.getLastWatchedSecond());
+        assertEquals(new BigDecimal("50.00"), response.getWatchedPercentage());
+        assertFalse(response.isCompleted());
+    }
+
+    @Test
     void shouldMarkCompletedWhenThresholdReached() {
         Course course = publishedCourse();
         AuthContext authContext = new AuthContext("42", UserRole.USER);
@@ -138,6 +167,7 @@ class LessonProgressServiceImplTest {
 
         LessonProgressResponse response = lessonProgressService.updateLessonProgress(authContext, "course-1", "lesson-1", request);
 
+        assertEquals(600, response.getDurationSeconds());
         assertTrue(response.isCompleted());
         assertNotNull(response.getCompletedAt());
         assertEquals(new BigDecimal("90.00"), response.getWatchedPercentage());
@@ -200,6 +230,7 @@ class LessonProgressServiceImplTest {
 
         LessonProgressResponse response = lessonProgressService.updateLessonProgress(authContext, "course-1", "lesson-1", request);
 
+        assertEquals(600, response.getDurationSeconds());
         assertEquals(600, response.getLastWatchedSecond());
         assertEquals(new BigDecimal("100.00"), response.getWatchedPercentage());
         assertTrue(response.isCompleted());
@@ -249,16 +280,53 @@ class LessonProgressServiceImplTest {
 
         LessonProgressResponse response = lessonProgressService.getLessonProgress(authContext, "course-1", "lesson-1");
 
+        assertEquals(600, response.getDurationSeconds());
         assertEquals(0, response.getLastWatchedSecond());
         assertEquals(new BigDecimal("0.00"), response.getWatchedPercentage());
         assertFalse(response.isCompleted());
+    }
+
+    @Test
+    void shouldReturnCourseProgressSummaryWithBackendTotalDuration() {
+        Course course = Course.builder()
+                .id("course-1")
+                .status(CourseStatus.PUBLISHED)
+                .lessons(List.of(
+                        Lesson.builder().id("lesson-1").duration(600).build(),
+                        Lesson.builder().id("lesson-2").duration(300).build(),
+                        Lesson.builder().id("lesson-3").duration(null).build()
+                ))
+                .build();
+        AuthContext authContext = new AuthContext("42", UserRole.USER);
+        LessonProgress progress = LessonProgress.builder()
+                .userId("42")
+                .courseId("course-1")
+                .lessonId("lesson-1")
+                .lastWatchedSecond(600)
+                .watchedPercentage(new BigDecimal("100.00"))
+                .completed(true)
+                .updatedAt(Instant.parse("2026-05-20T10:15:30Z"))
+                .build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-1")).thenReturn(Optional.of(course));
+        when(enrollmentAccessClient.hasActiveEnrollment("42", "course-1")).thenReturn(true);
+        when(lessonProgressRepository.findByUserIdAndCourseId("42", "course-1"))
+                .thenReturn(List.of(progress));
+
+        CourseProgressSummaryResponse response = lessonProgressService.getCourseProgressSummary(authContext, "course-1");
+
+        assertEquals(900, response.getTotalDurationSeconds());
+        assertEquals(3, response.getTotalLessons());
+        assertEquals(1, response.getCompletedLessons());
+        assertEquals(new BigDecimal("33.33"), response.getOverallPercentage());
+        assertEquals("lesson-1", response.getLastLessonId());
     }
 
     private Course publishedCourse() {
         return Course.builder()
                 .id("course-1")
                 .status(CourseStatus.PUBLISHED)
-                .lessons(List.of(Lesson.builder().id("lesson-1").build()))
+                .lessons(List.of(Lesson.builder().id("lesson-1").duration(600).build()))
                 .build();
     }
 }

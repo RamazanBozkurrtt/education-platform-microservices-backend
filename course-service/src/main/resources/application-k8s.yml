@@ -1,0 +1,58 @@
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${COURSE_DB_HOST:postgres}:${COURSE_DB_PORT:5432}/${COURSE_DB_NAME:edubase_course_projection_db}
+    username: ${COURSE_DB_USERNAME:postgres}
+    password: ${COURSE_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  cache:
+    type: ${CACHE_TYPE:redis}
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://mongo:27017/edubase_course_db}
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL:http://api-gateway:8090}
+  user-service:
+    url: ${USER_SERVICE_URL:http://user-service:8081}
+  enrollment-service:
+    url: ${ENROLLMENT_SERVICE_URL:http://enrollment-service:8084}
+
+grpc:
+  server:
+    port: 9093
+  client:
+    user:
+      host: ${USER_GRPC_HOST:user-service}
+      port: ${USER_GRPC_PORT:9091}
+
+course:
+  media:
+    minio:
+      endpoint: ${COURSE_MEDIA_MINIO_ENDPOINT:http://minio:9000}
+      access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY}
+      secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY}
+      bucket: ${COURSE_MEDIA_MINIO_BUCKET:edubase-media}
+      auto-create-bucket: ${COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET:true}
+
+recommendation:
+  service:
+    base-url: ${RECOMMENDATION_SERVICE_BASE_URL:http://recommendation-service:8000}

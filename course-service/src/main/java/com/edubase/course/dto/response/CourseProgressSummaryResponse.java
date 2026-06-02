@@ -17,6 +17,7 @@ import java.time.Instant;
 public class CourseProgressSummaryResponse {
 
     private String courseId;
+    private Integer totalDurationSeconds;
     private Integer totalLessons;
     private Integer completedLessons;
     private BigDecimal overallPercentage;

@@ -75,6 +75,13 @@ public class AuthController extends RestBaseController {
         return ok(new MessageResponse("Password has been reset successfully."));
     }
 
+    @GetMapping("/reset-password/validate")
+    @Operation(summary = "Validate password reset token", description = "Validates a one-time reset token without changing the password.")
+    public ResponseEntity<RestResponse<MessageResponse>> validateResetPasswordToken(@RequestParam("token") String token) {
+        passwordResetService.validateResetToken(token);
+        return ok(new MessageResponse("Password reset token is valid."));
+    }
+
     @GetMapping("/reactivate-account")
     @Operation(summary = "Reactivate account", description = "Reactivates account using one-time token.")
     public ResponseEntity<RestResponse<String>> reactivateAccountGet(

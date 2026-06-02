@@ -13,6 +13,7 @@ import com.edubase.payment.dto.response.InvoiceResponse;
 import com.edubase.payment.dto.response.PaymentResponse;
 import com.edubase.payment.entity.Invoice;
 import com.edubase.payment.entity.Payment;
+import com.edubase.payment.entity.PaymentProvider;
 import com.edubase.payment.entity.PaymentStatus;
 import com.edubase.payment.exception.InvoiceNotFoundException;
 import com.edubase.payment.exception.PaymentAlreadyCompletedException;
@@ -30,6 +31,7 @@ import com.edubase.payment.security.UserRole;
 import com.edubase.payment.service.abstracts.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -39,12 +41,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+    private static final String HMAC_SHA256 = "HmacSHA256";
+
 
     private final PaymentRepository paymentRepository;
     private final InvoiceRepository invoiceRepository;
@@ -53,6 +63,15 @@ public class PaymentServiceImpl implements PaymentService {
     private final UserGrpcClient userGrpcClient;
     private final CourseGrpcClient courseGrpcClient;
     private final ApplicationEventPublisher applicationEventPublisher;
+
+    @Value("${payment.gateway.webhook-secret:${PAYMENT_GATEWAY_WEBHOOK_SECRET:local-payment-webhook-secret-change-me}}")
+    private String gatewayWebhookSecret;
+
+    @Value("${payment.gateway.allowed-clock-skew-seconds:300}")
+    private long allowedClockSkewSeconds;
+
+    @Value("${payment.gateway.mock-confirm-enabled:false}")
+    private boolean mockConfirmEnabled;
 
     @Override
     @Transactional
@@ -95,6 +114,9 @@ public class PaymentServiceImpl implements PaymentService {
         Payment saved = paymentRepository.save(payment);
         boolean autoConfirm = request.getAutoConfirm() != null && request.getAutoConfirm();
         if (autoConfirm) {
+            if (!isAdmin(authContext)) {
+                throw new AccessDeniedException("autoConfirm is restricted to administrative flows");
+            }
             saved = markPaymentSucceeded(saved, toBillingDetails(request));
         }
         return toResponse(saved);
@@ -110,31 +132,31 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    @PreAuthorize("@paymentSecurity.canAccessPayment(#authContext, #id)")
+    @PreAuthorize("@paymentSecurity.isAuthenticatedUser(#authContext)")
     public PaymentResponse confirmPayment(AuthContext authContext, Long id, PaymentConfirmRequest request) {
         Payment payment = paymentRepository.findById(id).orElseThrow(PaymentNotFoundException::new);
-        boolean approved = request == null || request.getApproved() == null || request.getApproved();
+        requireConfirmOwner(authContext, payment);
+        requirePendingStatus(payment);
 
-        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
-            if (approved) {
-                return toResponse(payment);
-            }
-            throw new PaymentAlreadyCompletedException();
-        }
-        if (payment.getStatus() == PaymentStatus.REFUNDED) {
-            throw new PaymentAlreadyRefundedException();
-        }
-        if (payment.getStatus() == PaymentStatus.FAILED) {
-            if (!approved) {
-                return toResponse(payment);
-            }
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
+        if (isMockConfirmBypassEnabled(payment)) {
+            payment = markPaymentSucceeded(payment, toBillingDetails(request));
+            return toResponse(payment);
         }
 
+        if (request == null) {
+            throw new BusinessException(ErrorCode.MISSING_CONFIRMATION_PAYLOAD);
+        }
+
+        Boolean approved = request.getApproved();
+        if (approved == null) {
+            throw new BusinessException(ErrorCode.INVALID_PROVIDER_STATUS);
+        }
+
+        validateGatewayConfirmation(payment, request, approved);
         if (approved) {
             payment = markPaymentSucceeded(payment, toBillingDetails(request));
         } else {
-            payment = markPaymentFailed(payment, request == null ? null : request.getFailureReason());
+            payment = markPaymentFailed(payment, request.getFailureReason());
         }
         return toResponse(payment);
     }
@@ -186,6 +208,94 @@ public class PaymentServiceImpl implements PaymentService {
         Invoice invoice = invoiceRepository.findByPaymentId(paymentId)
                 .orElseThrow(InvoiceNotFoundException::new);
         return invoiceMapper.toResponseFromEntity(invoice);
+    }
+
+    private void validateGatewayConfirmation(Payment payment, PaymentConfirmRequest request, boolean approved) {
+        String gatewayTransactionId = normalizeOptional(request.getGatewayTransactionId());
+        String providedSignature = normalizeOptional(request.getGatewaySignature());
+        Long timestamp = request.getGatewayTimestampEpochSeconds();
+
+        if (gatewayTransactionId == null || providedSignature == null || timestamp == null || timestamp <= 0L) {
+            throw new BusinessException(ErrorCode.MISSING_CONFIRMATION_PAYLOAD);
+        }
+
+        if (!isGatewayTransactionIdCompatible(payment.getProvider(), gatewayTransactionId)) {
+            throw new BusinessException(ErrorCode.INVALID_PROVIDER_STATUS);
+        }
+
+        long nowEpochSeconds = Instant.now().getEpochSecond();
+        long driftSeconds = Math.abs(nowEpochSeconds - timestamp);
+        if (driftSeconds > Math.max(30L, allowedClockSkewSeconds)) {
+            throw new BusinessException(ErrorCode.INVALID_SIGNATURE);
+        }
+
+        String expected = computeGatewaySignature(payment, gatewayTransactionId, approved, timestamp);
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        byte[] providedBytes = providedSignature.getBytes(StandardCharsets.UTF_8);
+        if (!MessageDigest.isEqual(expectedBytes, providedBytes)) {
+            throw new BusinessException(ErrorCode.INVALID_SIGNATURE);
+        }
+    }
+
+    private boolean isGatewayTransactionIdCompatible(PaymentProvider provider, String gatewayTransactionId) {
+        if (provider == null || gatewayTransactionId == null) {
+            return false;
+        }
+
+        return switch (provider) {
+            case STRIPE -> gatewayTransactionId.startsWith("pi_") || gatewayTransactionId.startsWith("ch_");
+            case IYZICO -> gatewayTransactionId.startsWith("iyz_") || gatewayTransactionId.startsWith("pay_");
+            case MOCK_GATEWAY -> gatewayTransactionId.startsWith("mock_");
+        };
+    }
+
+    private String computeGatewaySignature(Payment payment, String gatewayTransactionId, boolean approved, long timestamp) {
+        String secret = normalizeOptional(gatewayWebhookSecret);
+        if (secret == null) {
+            throw new BusinessException(ErrorCode.INVALID_SIGNATURE);
+        }
+
+        String payload = String.join("|",
+                String.valueOf(payment.getId()),
+                payment.getProvider() == null ? "" : payment.getProvider().name(),
+                payment.getProviderPaymentId() == null ? "" : payment.getProviderPaymentId(),
+                String.valueOf(payment.getUserId()),
+                payment.getCourseId() == null ? "" : payment.getCourseId(),
+                payment.getAmount() == null ? "" : payment.getAmount().toPlainString(),
+                payment.getCurrency() == null ? "" : payment.getCurrency(),
+                gatewayTransactionId,
+                String.valueOf(approved),
+                String.valueOf(timestamp)
+        );
+
+        try {
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256));
+            byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(digest);
+        } catch (Exception ex) {
+            throw new BusinessException(ErrorCode.INVALID_SIGNATURE, ex);
+        }
+    }
+
+    private void requireConfirmOwner(AuthContext authContext, Payment payment) {
+        if (isAdmin(authContext)) {
+            return;
+        }
+        Long actorUserId = requireUserId(authContext);
+        if (!actorUserId.equals(payment.getUserId())) {
+            throw new BusinessException(ErrorCode.PAYMENT_OWNER_MISMATCH);
+        }
+    }
+
+    private void requirePendingStatus(Payment payment) {
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_PENDING);
+        }
+    }
+
+    private boolean isMockConfirmBypassEnabled(Payment payment) {
+        return mockConfirmEnabled && payment != null && payment.getProvider() == PaymentProvider.MOCK_GATEWAY;
     }
 
     private Payment markPaymentSucceeded(Payment payment, BillingDetails billingDetails) {

@@ -18,6 +18,7 @@ public class LessonProgressResponse {
 
     private String courseId;
     private String lessonId;
+    private Integer durationSeconds;
     private Integer lastWatchedSecond;
     private BigDecimal watchedPercentage;
     private boolean completed;

@@ -1,0 +1,46 @@
+server:
+  port: 8087
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${PAYMENT_DB_HOST:postgres}:${PAYMENT_DB_PORT:5432}/${PAYMENT_DB_NAME:edubase_payment_db}
+    username: ${PAYMENT_DB_USERNAME:postgres}
+    password: ${PAYMENT_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL:http://api-gateway:8090}
+  user-service:
+    url: ${USER_SERVICE_URL:http://user-service:8081}
+  course-service:
+    url: ${COURSE_SERVICE_URL:http://course-service:8083}
+
+grpc:
+  server:
+    port: 9095
+  client:
+    user:
+      host: ${USER_GRPC_HOST:user-service}
+      port: ${USER_GRPC_PORT:9091}
+    course:
+      host: ${COURSE_GRPC_HOST:course-service}
+      port: ${COURSE_GRPC_PORT:9093}
+
+payment:
+  gateway:
+    webhook-secret: ${PAYMENT_GATEWAY_WEBHOOK_SECRET:local-payment-webhook-secret-change-me}
+    allowed-clock-skew-seconds: ${PAYMENT_GATEWAY_ALLOWED_CLOCK_SKEW_SECONDS:300}
+    mock-confirm-enabled: ${PAYMENT_GATEWAY_MOCK_CONFIRM_ENABLED:true}

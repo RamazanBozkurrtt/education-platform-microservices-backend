@@ -2,9 +2,7 @@ spring:
   application:
     name: auth-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
-    group:
-      dev: local
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
@@ -29,9 +27,9 @@ jwt:
   audience: ${JWT_AUDIENCE}
 
 app:
-  gateway-url: ${services.api-gateway.url}
+  gateway-url: ${API_BASE_URL:${services.api-gateway.url}}
   frontend:
-    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    base-url: ${FRONTEND_BASE_URL}
   password-reset:
     token-expiration: ${PASSWORD_RESET_TOKEN_EXPIRATION:15m}
   gmail:

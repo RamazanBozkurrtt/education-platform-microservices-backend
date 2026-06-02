@@ -1,5 +1,6 @@
 package com.edubase.course.controller;
 
+import com.edubase.course.dto.response.MediaDurationBackfillResponse;
 import com.edubase.course.dto.response.VideoPlaybackUrlResponse;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.AuthContextResolver;
@@ -22,7 +23,10 @@ public class CourseMediaController {
     private final CourseMediaService courseMediaService;
     private final AuthContextResolver authContextResolver;
 
-    @GetMapping(value = "/{courseId}/lessons/{lessonId}/video", produces = "video/mp4")
+    @GetMapping(value = {
+            "/{courseId}/lessons/{lessonId}/video",
+            "/{courseId}/lessons/{lessonId}/video/stream"
+    }, produces = "video/mp4")
     public ResponseEntity<Resource> getLessonVideo(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String courseId,
@@ -32,14 +36,18 @@ public class CourseMediaController {
         return courseMediaService.getLessonVideo(authContext, courseId, lessonId, headers);
     }
 
-    @GetMapping(value = "/public/{courseId}/lessons/{lessonId}/video", produces = "video/mp4")
+    @GetMapping(value = {
+            "/public/{courseId}/lessons/{lessonId}/video",
+            "/public/{courseId}/lessons/{lessonId}/video/stream"
+    }, produces = "video/mp4")
     public ResponseEntity<Resource> getPublicLessonVideoBySignature(
             @PathVariable String courseId,
             @PathVariable String lessonId,
+            @RequestParam("uid") String userId,
             @RequestParam("exp") long expiresAt,
             @RequestParam("sig") String signature,
             @RequestHeader HttpHeaders headers) {
-        return courseMediaService.getPublicLessonVideoBySignature(courseId, lessonId, expiresAt, signature, headers);
+        return courseMediaService.getPublicLessonVideoBySignature(courseId, lessonId, userId, expiresAt, signature, headers);
     }
 
     @PostMapping("/{courseId}/lessons/{lessonId}/video/playback-url")
@@ -102,5 +110,12 @@ public class CourseMediaController {
         AuthContext authContext = authContextResolver.requireAuth(jwt);
         courseMediaService.deleteLessonVideo(authContext, courseId, lessonId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/admin/media/backfill-durations")
+    public ResponseEntity<MediaDurationBackfillResponse> backfillLessonDurations(
+            @AuthenticationPrincipal Jwt jwt) {
+        AuthContext authContext = authContextResolver.requireAuth(jwt);
+        return ResponseEntity.ok(courseMediaService.backfillLessonDurations(authContext));
     }
 }

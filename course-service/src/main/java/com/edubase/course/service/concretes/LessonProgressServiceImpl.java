@@ -39,6 +39,7 @@ public class LessonProgressServiceImpl implements LessonProgressService {
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final BigDecimal ZERO = BigDecimal.ZERO;
     private static final BigDecimal DEFAULT_COMPLETION_THRESHOLD = BigDecimal.valueOf(90);
+    private static final int MAX_REASONABLE_VIDEO_DURATION_SECONDS = 24 * 60 * 60;
 
     private final CourseRepository courseRepository;
     private final LessonProgressRepository lessonProgressRepository;
@@ -57,10 +58,13 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         validateRequest(request);
 
         Course course = resolveCourseForProgress(authContext, courseId);
-        resolveLesson(course, lessonId);
+        Lesson lesson = resolveLesson(course, lessonId);
+        int durationSeconds = resolveBackendDurationSeconds(lesson);
         String userId = requireUserId(authContext);
 
-        int clampedRequestedSecond = Math.min(request.getLastWatchedSecond(), request.getVideoDurationSecond());
+        int clampedRequestedSecond = durationSeconds > 0
+                ? Math.min(request.getLastWatchedSecond(), durationSeconds)
+                : request.getLastWatchedSecond();
         Optional<LessonProgress> existingOptional =
                 lessonProgressRepository.findByUserIdAndCourseIdAndLessonId(userId, course.getId(), lessonId);
 
@@ -73,18 +77,18 @@ public class LessonProgressServiceImpl implements LessonProgressService {
                 .completed(false)
                 .build());
 
-        applyProgressRules(progress, clampedRequestedSecond, request.getVideoDurationSecond());
+        applyProgressRules(progress, clampedRequestedSecond, durationSeconds);
 
         try {
             LessonProgress saved = lessonProgressRepository.save(progress);
-            return toResponse(saved);
+            return toResponse(saved, durationSeconds);
         } catch (DataIntegrityViolationException ex) {
             LessonProgress existing = lessonProgressRepository
                     .findByUserIdAndCourseIdAndLessonId(userId, course.getId(), lessonId)
                     .orElseThrow(() -> ex);
-            applyProgressRules(existing, clampedRequestedSecond, request.getVideoDurationSecond());
+            applyProgressRules(existing, clampedRequestedSecond, durationSeconds);
             LessonProgress saved = lessonProgressRepository.save(existing);
-            return toResponse(saved);
+            return toResponse(saved, durationSeconds);
         }
     }
 
@@ -92,14 +96,16 @@ public class LessonProgressServiceImpl implements LessonProgressService {
     @Transactional(readOnly = true)
     public LessonProgressResponse getLessonProgress(AuthContext authContext, String courseId, String lessonId) {
         Course course = resolveCourseForProgress(authContext, courseId);
-        resolveLesson(course, lessonId);
+        Lesson lesson = resolveLesson(course, lessonId);
+        int durationSeconds = resolveBackendDurationSeconds(lesson);
         String userId = requireUserId(authContext);
 
         return lessonProgressRepository.findByUserIdAndCourseIdAndLessonId(userId, course.getId(), lessonId)
-                .map(this::toResponse)
+                .map(progress -> toResponse(progress, durationSeconds))
                 .orElseGet(() -> LessonProgressResponse.builder()
                         .courseId(course.getId())
                         .lessonId(lessonId)
+                        .durationSeconds(durationSeconds)
                         .lastWatchedSecond(0)
                         .watchedPercentage(ZERO.setScale(2, RoundingMode.HALF_UP))
                         .completed(false)
@@ -117,7 +123,7 @@ public class LessonProgressServiceImpl implements LessonProgressService {
 
         return lessonProgressRepository.findByUserIdAndCourseIdOrderByUpdatedAtDesc(userId, course.getId()).stream()
                 .filter(progress -> lessonIds.contains(progress.getLessonId()))
-                .map(this::toResponse)
+                .map(progress -> toResponse(progress, resolveBackendDurationSeconds(course, progress.getLessonId())))
                 .toList();
     }
 
@@ -152,6 +158,7 @@ public class LessonProgressServiceImpl implements LessonProgressService {
 
         return CourseProgressSummaryResponse.builder()
                 .courseId(course.getId())
+                .totalDurationSeconds(calculateTotalDurationSeconds(course))
                 .totalLessons(totalLessons)
                 .completedLessons(completedLessons)
                 .overallPercentage(overallPercentage)
@@ -164,9 +171,7 @@ public class LessonProgressServiceImpl implements LessonProgressService {
     private void validateRequest(LessonProgressUpdateRequest request) {
         if (request == null
                 || request.getLastWatchedSecond() == null
-                || request.getVideoDurationSecond() == null
-                || request.getLastWatchedSecond() < 0
-                || request.getVideoDurationSecond() <= 0) {
+                || request.getLastWatchedSecond() < 0) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR);
         }
         if (request.getWatchedPercentage() != null
@@ -181,8 +186,13 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         int mergedLastSecond = Math.max(previousLastSecond, requestedSecond);
         progress.setLastWatchedSecond(mergedLastSecond);
 
-        BigDecimal calculated = calculateWatchedPercentage(mergedLastSecond, videoDurationSecond);
         BigDecimal previousPercentage = progress.getWatchedPercentage() == null ? ZERO : progress.getWatchedPercentage();
+        if (videoDurationSecond <= 0) {
+            progress.setWatchedPercentage(previousPercentage.setScale(2, RoundingMode.HALF_UP));
+            return;
+        }
+
+        BigDecimal calculated = calculateWatchedPercentage(mergedLastSecond, videoDurationSecond);
         BigDecimal mergedPercentage = calculated.max(previousPercentage).min(ONE_HUNDRED).setScale(2, RoundingMode.HALF_UP);
         progress.setWatchedPercentage(mergedPercentage);
 
@@ -289,10 +299,11 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         return authContext.userId().trim();
     }
 
-    private LessonProgressResponse toResponse(LessonProgress progress) {
+    private LessonProgressResponse toResponse(LessonProgress progress, int durationSeconds) {
         return LessonProgressResponse.builder()
                 .courseId(progress.getCourseId())
                 .lessonId(progress.getLessonId())
+                .durationSeconds(durationSeconds)
                 .lastWatchedSecond(progress.getLastWatchedSecond())
                 .watchedPercentage((progress.getWatchedPercentage() == null ? ZERO : progress.getWatchedPercentage())
                         .setScale(2, RoundingMode.HALF_UP))
@@ -311,5 +322,39 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         } catch (NumberFormatException ex) {
             return false;
         }
+    }
+
+    private int calculateTotalDurationSeconds(Course course) {
+        if (course == null || course.getLessons() == null || course.getLessons().isEmpty()) {
+            return 0;
+        }
+        long total = course.getLessons().stream()
+                .map(this::resolveBackendDurationSeconds)
+                .filter(duration -> duration > 0)
+                .mapToLong(Integer::longValue)
+                .sum();
+        return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
+    }
+
+    private int resolveBackendDurationSeconds(Course course, String lessonId) {
+        if (course == null || course.getLessons() == null || course.getLessons().isEmpty()) {
+            return 0;
+        }
+        return course.getLessons().stream()
+                .filter(lesson -> lesson != null && lessonId.equals(lesson.getId()))
+                .findFirst()
+                .map(this::resolveBackendDurationSeconds)
+                .orElse(0);
+    }
+
+    private int resolveBackendDurationSeconds(Lesson lesson) {
+        if (lesson == null || lesson.getDuration() == null) {
+            return 0;
+        }
+        Integer durationSeconds = lesson.getDuration();
+        if (durationSeconds <= 0 || durationSeconds > MAX_REASONABLE_VIDEO_DURATION_SECONDS) {
+            return 0;
+        }
+        return durationSeconds;
     }
 }
