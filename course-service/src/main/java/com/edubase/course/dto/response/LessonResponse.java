@@ -15,7 +15,12 @@ public class LessonResponse {
     private String title;
     private String summaryTitle;
     private String videoUrl;
+    /**
+     * @deprecated Use durationSeconds. Kept for backward compatibility.
+     */
+    @Deprecated
     private Integer duration;
+    private Integer durationSeconds;
     private Integer orderIndex;
     private boolean completed;
 }

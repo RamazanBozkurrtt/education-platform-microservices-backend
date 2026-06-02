@@ -1,4 +1,4 @@
-FROM maven:3.9.6-eclipse-temurin-21 AS build
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN mvn -pl user-service -am dependency:go-offline
 COPY . .
 RUN mvn -pl user-service -am clean package -DskipTests
 
-FROM eclipse-temurin:21-jdk
+FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
 

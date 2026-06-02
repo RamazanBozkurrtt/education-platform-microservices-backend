@@ -20,4 +20,4 @@ services:
 
 app:
   frontend:
-    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    base-url: ${FRONTEND_BASE_URL}

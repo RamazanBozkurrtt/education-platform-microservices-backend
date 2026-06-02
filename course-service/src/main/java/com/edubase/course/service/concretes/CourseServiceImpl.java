@@ -62,6 +62,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CourseServiceImpl implements CourseService {
 
+    private static final int MAX_REASONABLE_VIDEO_DURATION_SECONDS = 24 * 60 * 60;
+
     private static final String PUBLIC_COURSE_IMAGE_PATH_TEMPLATE = "/courses/public/%s/image";
 
     private final CategoryRepository categoryRepository;
@@ -210,6 +212,9 @@ public class CourseServiceImpl implements CourseService {
         List<Lesson> lessons = ensureLessons(course);
         Lesson lesson = lessonMapper.toEntityFromRequest(request);
         lesson.setId(UUID.randomUUID().toString());
+        lesson.setVideoUrl(null);
+        lesson.setVideoUpdatedAt(null);
+        lesson.setDuration(null);
         lessons.add(lesson);
         sortLessons(lessons);
 
@@ -229,7 +234,13 @@ public class CourseServiceImpl implements CourseService {
         requireAdminOrInstructor(authContext, course);
 
         Lesson lesson = findLesson(course, lessonId);
+        String existingVideoUrl = lesson.getVideoUrl();
+        Instant existingVideoUpdatedAt = lesson.getVideoUpdatedAt();
+        Integer existingDuration = lesson.getDuration();
         lessonMapper.updateLessonFromRequest(request, lesson);
+        lesson.setVideoUrl(existingVideoUrl);
+        lesson.setVideoUpdatedAt(existingVideoUpdatedAt);
+        lesson.setDuration(existingDuration);
         sortLessons(ensureLessons(course));
 
         Course saved = courseRepository.save(course);
@@ -301,7 +312,8 @@ public class CourseServiceImpl implements CourseService {
         if (response == null) {
             return response;
         }
-        response.setDuration(calculateTotalDurationSeconds(response.getLessons()));
+        sanitizeLessonDurations(response.getLessons());
+        setCourseDurationFields(response, calculateTotalDurationSeconds(response.getLessons()));
         response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
         List<String> normalizedCategoryIds = normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId());
         response.setCategoryIds(normalizedCategoryIds);
@@ -347,7 +359,8 @@ public class CourseServiceImpl implements CourseService {
                 instructorProjectionService.findSummariesByInstructorIds(instructorIds);
 
         for (CourseResponse response : responses) {
-            response.setDuration(calculateTotalDurationSeconds(response.getLessons()));
+            sanitizeLessonDurations(response.getLessons());
+            setCourseDurationFields(response, calculateTotalDurationSeconds(response.getLessons()));
             response.setImageUrl(buildPublicCourseImageUrl(response.getId()));
             List<String> normalizedCategoryIds = normalizeCategoryIds(response.getCategoryIds(), response.getCategoryId());
             response.setCategoryIds(normalizedCategoryIds);
@@ -592,19 +605,58 @@ public class CourseServiceImpl implements CourseService {
         return value != null && !value.trim().isEmpty();
     }
 
-    private Integer calculateTotalDurationSeconds(List<LessonResponse> lessons) {
+    private int calculateTotalDurationSeconds(List<LessonResponse> lessons) {
         if (lessons == null || lessons.isEmpty()) {
             return 0;
         }
         long total = lessons.stream()
-                .map(LessonResponse::getDuration)
-                .filter(duration -> duration != null && duration > 0)
+                .map(this::lessonDurationSeconds)
+                .filter(duration -> duration > 0)
                 .mapToLong(Integer::longValue)
                 .sum();
         if (total <= 0L) {
             return 0;
         }
         return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
+    }
+
+    private void sanitizeLessonDurations(List<LessonResponse> lessons) {
+        if (lessons == null || lessons.isEmpty()) {
+            return;
+        }
+        for (LessonResponse lesson : lessons) {
+            if (lesson == null) {
+                continue;
+            }
+            int durationSeconds = lessonDurationSeconds(lesson);
+            lesson.setDuration(durationSeconds);
+            lesson.setDurationSeconds(durationSeconds);
+        }
+    }
+
+    private void setCourseDurationFields(CourseResponse response, int durationSeconds) {
+        response.setDuration(durationSeconds);
+        response.setDurationSeconds(durationSeconds);
+        response.setTotalDurationSeconds(durationSeconds);
+    }
+
+    private int lessonDurationSeconds(LessonResponse lesson) {
+        if (lesson == null) {
+            return 0;
+        }
+        Integer durationSeconds = lesson.getDurationSeconds();
+        if (isReasonableLessonDuration(durationSeconds)) {
+            return durationSeconds;
+        }
+        Integer legacyDuration = lesson.getDuration();
+        if (isReasonableLessonDuration(legacyDuration)) {
+            return legacyDuration;
+        }
+        return 0;
+    }
+
+    private boolean isReasonableLessonDuration(Integer duration) {
+        return duration != null && duration > 0 && duration <= MAX_REASONABLE_VIDEO_DURATION_SECONDS;
     }
 
     private String buildPublicCourseImageUrl(String courseId) {

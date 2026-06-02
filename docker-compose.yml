@@ -247,8 +247,8 @@ services:
       KAFKA_TOPIC_USER_REGISTERED: user.registered.v1
       GATEWAY_URL: http://api-gateway:8090
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
 
   user-service:
     build:
@@ -288,9 +288,9 @@ services:
       USER_MEDIA_MINIO_BUCKET: edubase-media
       USER_MEDIA_MINIO_AUTO_CREATE_BUCKET: "true"
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8081:8081"
-      - "9091:9091"
+    expose:
+      - "8081"
+      - "9091"
 
   course-service:
     build:
@@ -336,9 +336,9 @@ services:
       COURSE_MEDIA_MINIO_BUCKET: edubase-media
       COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET: "true"
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8083:8083"
-      - "9093:9092"
+    expose:
+      - "8083"
+      - "9092"
 
   enrollment-service:
     build:
@@ -377,8 +377,8 @@ services:
       PAYMENT_GRPC_PORT: 9095
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-internal-api-key}
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8084:8084"
+    expose:
+      - "8084"
 
   payment-service:
     build:
@@ -413,9 +413,9 @@ services:
       COURSE_GRPC_PORT: 9092
       PAYMENT_GRPC_PORT: 9095
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8087:8087"
-      - "9095:9095"
+    expose:
+      - "8087"
+      - "9095"
 
   review-service:
     build:
@@ -439,8 +439,8 @@ services:
       GATEWAY_URL: http://api-gateway:8090
       COURSE_SERVICE_URL: http://course-service:8083
       JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8086:8086"
+    expose:
+      - "8086"
 
   search-service:
     build:
@@ -461,9 +461,9 @@ services:
       KAFKA_TOPIC_COURSE_RATING_UPDATED: course.rating.updated.v1
       ELASTICSEARCH_URIS: http://elasticsearch:9200
       SEARCH_GRPC_PORT: 9094
-    ports:
-      - "8085:8085"
-      - "9094:9094"
+    expose:
+      - "8085"
+      - "9094"
 
   api-gateway:
     build:

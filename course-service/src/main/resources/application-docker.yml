@@ -52,3 +52,7 @@ course:
       secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY}
       bucket: ${COURSE_MEDIA_MINIO_BUCKET:edubase-media}
       auto-create-bucket: ${COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET:true}
+
+recommendation:
+  service:
+    base-url: ${RECOMMENDATION_SERVICE_BASE_URL:http://recommendation-service:8000}

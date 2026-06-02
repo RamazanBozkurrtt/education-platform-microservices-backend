@@ -11,9 +11,7 @@ spring:
       max-file-size: ${COURSE_MEDIA_MAX_FILE_SIZE:2GB}
       max-request-size: ${COURSE_MEDIA_MAX_REQUEST_SIZE:2100MB}
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
-    group:
-      dev: local
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
@@ -83,3 +81,16 @@ app:
     api-key: ${INTERNAL_API_KEY}
     enrollment-service-base-url: ${ENROLLMENT_SERVICE_INTERNAL_BASE_URL:${services.enrollment-service.url}}
     user-service-base-url: ${services.user-service.url}
+
+recommendation:
+  service:
+    base-url: ${RECOMMENDATION_SERVICE_BASE_URL}
+    connect-timeout-ms: ${RECOMMENDATION_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${RECOMMENDATION_SERVICE_READ_TIMEOUT_MS:5000}
+  candidate-limit: ${RECOMMENDATION_CANDIDATE_LIMIT:150}
+  default-preferred-duration-seconds: ${RECOMMENDATION_DEFAULT_PREFERRED_DURATION_SECONDS:5400}
+  recent-course-limit: ${RECOMMENDATION_RECENT_COURSE_LIMIT:5}
+  dropout-low-progress-threshold-percent: ${RECOMMENDATION_DROPOUT_LOW_PROGRESS_THRESHOLD_PERCENT:25}
+
+media:
+  ffprobe-path: ${FFMPEG_FFPROBE_PATH:ffprobe}

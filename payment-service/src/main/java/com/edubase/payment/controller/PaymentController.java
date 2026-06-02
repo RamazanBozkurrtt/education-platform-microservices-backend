@@ -69,7 +69,7 @@ public class PaymentController extends RestBaseController {
     public ResponseEntity<RestResponse<PaymentResponse>> confirmPayment(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable Long id,
-            @RequestBody @Valid PaymentConfirmRequest request) {
+            @RequestBody(required = false) @Valid PaymentConfirmRequest request) {
         AuthContext authContext = authContextResolver.requireAuth(jwt);
         return ok(paymentService.confirmPayment(authContext, id, request));
     }

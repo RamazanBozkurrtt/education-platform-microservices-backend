@@ -382,6 +382,8 @@ class CourseServiceImplTest {
         assertEquals("course-8", result.getContent().get(0).getId());
         assertNull(result.getContent().get(0).getLevel());
         assertEquals(0, result.getContent().get(0).getDuration());
+        assertEquals(0, result.getContent().get(0).getDurationSeconds());
+        assertEquals(0, result.getContent().get(0).getTotalDurationSeconds());
     }
 
     @Test
@@ -419,5 +421,51 @@ class CourseServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
         assertEquals(300, result.getContent().get(0).getDuration());
+        assertEquals(300, result.getContent().get(0).getDurationSeconds());
+        assertEquals(300, result.getContent().get(0).getTotalDurationSeconds());
+        assertEquals(120, result.getContent().get(0).getLessons().get(0).getDurationSeconds());
+        assertEquals(180, result.getContent().get(0).getLessons().get(1).getDurationSeconds());
+        assertEquals(0, result.getContent().get(0).getLessons().get(2).getDuration());
+        assertEquals(0, result.getContent().get(0).getLessons().get(2).getDurationSeconds());
+    }
+
+    @Test
+    void getPublicCourses_shouldIgnoreUnreasonableLessonDurations() {
+        Course course = Course.builder()
+                .id("course-10")
+                .status(CourseStatus.PUBLISHED)
+                .instructorId("inst-10")
+                .categoryIds(List.of("cat-1"))
+                .lessons(new ArrayList<>())
+                .build();
+        CourseResponse mapped = CourseResponse.builder()
+                .id("course-10")
+                .instructorId("inst-10")
+                .categoryIds(List.of("cat-1"))
+                .lessons(List.of(
+                        LessonResponse.builder().id("l1").duration(120).build(),
+                        LessonResponse.builder().id("l2").duration(11_761_200).build()
+                ))
+                .build();
+
+        when(courseRepository.findAllByStatusAndDeletedAtIsNull(
+                org.mockito.ArgumentMatchers.eq(CourseStatus.PUBLISHED),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new PageImpl<>(List.of(course)));
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(mapped);
+        when(categoryRepository.findAllById(List.of("cat-1")))
+                .thenReturn(List.of(new Category("cat-1", "Category", null, null)));
+        when(instructorProjectionService.findSummariesByInstructorIds(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of());
+
+        CustomPageResponse<CourseResponse> result = courseService.getPublicCourses(0, 50);
+
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals(120, result.getContent().get(0).getDuration());
+        assertEquals(120, result.getContent().get(0).getDurationSeconds());
+        assertEquals(120, result.getContent().get(0).getTotalDurationSeconds());
+        assertEquals(0, result.getContent().get(0).getLessons().get(1).getDuration());
+        assertEquals(0, result.getContent().get(0).getLessons().get(1).getDurationSeconds());
     }
 }

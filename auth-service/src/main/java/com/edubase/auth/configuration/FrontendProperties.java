@@ -11,5 +11,5 @@ import org.springframework.stereotype.Component;
 @Setter
 public class FrontendProperties {
 
-    private String baseUrl = "http://localhost:5173";
+    private String baseUrl;
 }

@@ -1,0 +1,44 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${USER_DB_HOST:postgres}:${USER_DB_PORT:5432}/${USER_DB_NAME:edubase_user_db}
+    username: ${USER_DB_USERNAME:postgres}
+    password: ${USER_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL:http://api-gateway:8090}
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:8080}
+
+user:
+  media:
+    minio:
+      endpoint: ${USER_MEDIA_MINIO_ENDPOINT:http://minio:9000}
+      access-key: ${USER_MEDIA_MINIO_ACCESS_KEY}
+      secret-key: ${USER_MEDIA_MINIO_SECRET_KEY}
+      bucket: ${USER_MEDIA_MINIO_BUCKET:edubase-media}
+      auto-create-bucket: ${USER_MEDIA_MINIO_AUTO_CREATE_BUCKET:true}
+
+grpc:
+  server:
+    port: 9091

@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -37,6 +39,7 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
 
     private final CategoryRepository categoryRepository;
     private final CourseLevelRepository courseLevelRepository;
+    private final CacheManager cacheManager;
 
     @Value("${course.sample.enabled:true}")
     private boolean enabled;
@@ -64,8 +67,18 @@ public class CourseSampleDataInitializer implements ApplicationRunner {
                 ));
             }
         }
+
+        clearCache("courseCategoriesPublic");
+        clearCache(CourseCacheNames.COURSE_CATEGORIES_PUBLIC);
     }
 
     private record SampleCourseLevel(String levelName, int displayOrder) {
+    }
+
+    private void clearCache(String cacheName) {
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache != null) {
+            cache.clear();
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.edubase.course.service.abstracts;
 
 import com.edubase.course.security.AuthContext;
+import com.edubase.course.dto.response.MediaDurationBackfillResponse;
 import com.edubase.course.dto.response.VideoPlaybackUrlResponse;
 import com.edubase.course.entity.Course;
 import org.springframework.core.io.Resource;
@@ -12,7 +13,7 @@ public interface CourseMediaService {
 
     ResponseEntity<Resource> getLessonVideo(AuthContext authContext, String courseId, String lessonId, HttpHeaders headers);
 
-    ResponseEntity<Resource> getPublicLessonVideoBySignature(String courseId, String lessonId, long expiresAt, String signature, HttpHeaders headers);
+    ResponseEntity<Resource> getPublicLessonVideoBySignature(String courseId, String lessonId, String userId, long expiresAt, String signature, HttpHeaders headers);
 
     VideoPlaybackUrlResponse createLessonVideoPlaybackUrl(AuthContext authContext, String courseId, String lessonId);
 
@@ -31,4 +32,6 @@ public interface CourseMediaService {
     void deleteCourseMediaAssets(Course course);
 
     void deleteLessonVideoAsset(String courseId, String lessonId);
+
+    MediaDurationBackfillResponse backfillLessonDurations(AuthContext authContext);
 }

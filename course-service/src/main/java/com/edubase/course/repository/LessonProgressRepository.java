@@ -14,6 +14,8 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
 
     List<LessonProgress> findByUserIdAndCourseIdOrderByUpdatedAtDesc(String userId, String courseId);
 
+    List<LessonProgress> findByUserIdOrderByUpdatedAtDesc(String userId);
+
     boolean existsByUserIdAndCourseIdAndLessonId(String userId, String courseId, String lessonId);
 
     long countByUserIdAndCourseIdAndCompletedTrue(String userId, String courseId);

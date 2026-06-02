@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${AUTH_DB_HOST:postgres}:${AUTH_DB_PORT:5432}/${AUTH_DB_NAME:auth_db}
+    username: ${AUTH_DB_USERNAME:postgres}
+    password: ${AUTH_DB_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+
+jwt:
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL:http://api-gateway:8090}
+
+app:
+  gateway-url: ${API_BASE_URL:http://localhost:30090}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:30080}

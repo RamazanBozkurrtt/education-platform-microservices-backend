@@ -29,7 +29,7 @@ public class NetworkUtils {
             return InetAddress.getLocalHost().getHostAddress();
         } catch (UnknownHostException e) {
             log.error("IP Adresi alınamadı! Mikroservis iletişimi aksayabilir.");
-            return "127.0.0.1";
+            return InetAddress.getLoopbackAddress().getHostAddress();
         }
     }
 

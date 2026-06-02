@@ -7,6 +7,7 @@ import com.edubase.course.messaging.CourseSearchSyncKafkaPublisher;
 import com.edubase.course.repository.CourseRepository;
 import com.edubase.course.security.AuthContext;
 import com.edubase.course.security.UserRole;
+import com.edubase.course.service.abstracts.VideoDurationService;
 import com.edubase.course.service.concretes.CourseMediaServiceImpl;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.mp4.Mp4Directory;
@@ -31,6 +32,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -54,6 +56,9 @@ class CourseMediaServiceImplTest {
     @Mock
     private CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
 
+    @Mock
+    private VideoDurationService videoDurationService;
+
     @InjectMocks
     private CourseMediaServiceImpl courseMediaService;
 
@@ -63,6 +68,7 @@ class CourseMediaServiceImplTest {
         ReflectionTestUtils.setField(courseMediaService, "mediaBucket", "edubase-media");
         ReflectionTestUtils.setField(courseMediaService, "basePath", "videos");
         ReflectionTestUtils.setField(courseMediaService, "autoCreateBucket", false);
+        ReflectionTestUtils.setField(courseMediaService, "playbackSigningKey", "test-signing-key");
     }
 
     @Test
@@ -83,7 +89,7 @@ class CourseMediaServiceImplTest {
 
         courseMediaService.uploadLessonVideo(authContext, "course-1", "lesson-1", file);
 
-        assertEquals("/courses/course-1/lessons/lesson-1/video", lesson.getVideoUrl());
+        assertEquals("/api/v1/courses/course-1/lessons/lesson-1/video/stream", lesson.getVideoUrl());
         assertEquals(95, lesson.getDuration());
         assertNotNull(lesson.getVideoUpdatedAt());
         verify(courseRepository).save(course);
@@ -91,7 +97,7 @@ class CourseMediaServiceImplTest {
     }
 
     @Test
-    void uploadLessonVideo_whenDurationCannotBeParsed_keepsExistingDuration() {
+    void uploadLessonVideo_whenDurationCannotBeParsed_setsZeroDurationFallback() {
         Lesson lesson = Lesson.builder().id("lesson-1").duration(120).build();
         Course course = Course.builder()
                 .id("course-1")
@@ -108,7 +114,7 @@ class CourseMediaServiceImplTest {
 
         courseMediaService.uploadLessonVideo(authContext, "course-1", "lesson-1", file);
 
-        assertEquals(120, lesson.getDuration());
+        assertEquals(0, lesson.getDuration());
         assertNotNull(lesson.getVideoUpdatedAt());
         verify(courseRepository).save(course);
         verify(courseSearchSyncKafkaPublisher).publishUpsert(course);
@@ -116,7 +122,7 @@ class CourseMediaServiceImplTest {
 
     @Test
     void deleteLessonVideo_clearsLessonVideoUrl() {
-        Lesson lesson = Lesson.builder().id("lesson-1").videoUrl("/courses/course-1/lessons/lesson-1/video").build();
+        Lesson lesson = Lesson.builder().id("lesson-1").videoUrl("/api/v1/courses/course-1/lessons/lesson-1/video/stream").build();
         Course course = Course.builder()
                 .id("course-1")
                 .instructorId("instructor-1")
@@ -190,6 +196,54 @@ class CourseMediaServiceImplTest {
     }
 
     @Test
+    void getLessonVideo_withInvalidRange_returns416() throws Exception {
+        Lesson lesson = Lesson.builder().id("lesson-1").build();
+        Course course = Course.builder()
+                .id("course-1")
+                .instructorId("instructor-1")
+                .lessons(List.of(lesson))
+                .build();
+        AuthContext authContext = new AuthContext("instructor-1", UserRole.INSTRUCTOR);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RANGE, "bytes=invalid");
+        StatObjectResponse stat = mock(StatObjectResponse.class);
+
+        when(courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull("course-1", "instructor-1")).thenReturn(true);
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-1")).thenReturn(Optional.of(course));
+        when(minioClient.statObject(any())).thenReturn(stat);
+        when(stat.size()).thenReturn(5_000L);
+
+        ResponseEntity<Resource> response = courseMediaService.getLessonVideo(authContext, "course-1", "lesson-1", headers);
+
+        assertEquals(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, response.getStatusCode());
+        assertEquals("bytes", response.getHeaders().getFirst(HttpHeaders.ACCEPT_RANGES));
+        assertEquals("bytes */5000", response.getHeaders().getFirst(HttpHeaders.CONTENT_RANGE));
+        assertNull(response.getBody());
+    }
+
+    @Test
+    void createLessonVideoPlaybackUrl_returnsRelativeGatewayStreamPath() {
+        Lesson lesson = Lesson.builder().id("lesson-1").build();
+        Course course = Course.builder()
+                .id("course-1")
+                .instructorId("instructor-1")
+                .lessons(List.of(lesson))
+                .build();
+        AuthContext authContext = new AuthContext("instructor-1", UserRole.INSTRUCTOR);
+
+        when(courseRepository.existsByIdAndInstructorIdAndDeletedAtIsNull("course-1", "instructor-1")).thenReturn(true);
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-1")).thenReturn(Optional.of(course));
+
+        var response = courseMediaService.createLessonVideoPlaybackUrl(authContext, "course-1", "lesson-1");
+
+        assertTrue(response.getUrl().startsWith("/api/v1/courses/public/course-1/lessons/lesson-1/video/stream?"));
+        assertTrue(response.getUrl().contains("uid=instructor-1"));
+        assertTrue(response.getUrl().contains("exp="));
+        assertTrue(response.getUrl().contains("sig="));
+        assertTrue(response.getExpiresAt() > 0);
+    }
+
+    @Test
     void getLessonVideo_whenInstructorIsNotOwner_allowsPublishedCourseAsLearner() throws Exception {
         Lesson lesson = Lesson.builder().id("lesson-1").build();
         Course course = Course.builder()
@@ -226,6 +280,12 @@ class CourseMediaServiceImplTest {
     void parseDurationDescription_shouldParseHumanReadableUnits() {
         Integer parsed = ReflectionTestUtils.invokeMethod(courseMediaService, "parseDurationDescription", "3 min 11 sec");
         assertEquals(191, parsed);
+    }
+
+    @Test
+    void parseDurationDescription_shouldTreatMillisecondsAsMilliseconds() {
+        Integer parsed = ReflectionTestUtils.invokeMethod(courseMediaService, "parseDurationDescription", "196020 ms");
+        assertEquals(196, parsed);
     }
 
     @Test

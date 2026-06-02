@@ -23,6 +23,14 @@ public class PaymentConfirmRequest {
     @Size(max = 255, message = "failureReason can be at most 255 chars")
     private String failureReason;
 
+    @Size(max = 128, message = "gatewayTransactionId can be at most 128 chars")
+    private String gatewayTransactionId;
+
+    private Long gatewayTimestampEpochSeconds;
+
+    @Size(max = 256, message = "gatewaySignature can be at most 256 chars")
+    private String gatewaySignature;
+
     @Size(max = 120, message = "buyerFullName can be at most 120 chars")
     private String buyerFullName;
 

@@ -40,7 +40,13 @@ public class CourseResponse {
     private List<CategoryResponse> categories;
     private List<String> learningOutcomes;
     private List<String> tags;
+    /**
+     * @deprecated Use durationSeconds. Kept for backward compatibility.
+     */
+    @Deprecated
     private Integer duration;
+    private Integer durationSeconds;
+    private Integer totalDurationSeconds;
     private Instant createdAt;
     private Instant updatedAt;
     private List<LessonResponse> lessons;

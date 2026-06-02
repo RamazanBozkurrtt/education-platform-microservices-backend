@@ -5,9 +5,7 @@ spring:
   application:
     name: payment-service
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
-    group:
-      dev: local
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
@@ -36,6 +34,12 @@ app:
     topics:
       payment-succeeded: ${KAFKA_TOPIC_PAYMENT_SUCCEEDED:payment.succeeded.v1}
       payment-refunded: ${KAFKA_TOPIC_PAYMENT_REFUNDED:payment.refunded.v1}
+
+payment:
+  gateway:
+    webhook-secret: ${PAYMENT_GATEWAY_WEBHOOK_SECRET:local-payment-webhook-secret-change-me}
+    allowed-clock-skew-seconds: ${PAYMENT_GATEWAY_ALLOWED_CLOCK_SKEW_SECONDS:300}
+    mock-confirm-enabled: ${PAYMENT_GATEWAY_MOCK_CONFIRM_ENABLED:false}
 
 auth:
   debug: ${AUTH_DEBUG:false}

@@ -6,6 +6,8 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface CourseRepository extends MongoRepository<Course, String> {
@@ -20,4 +22,8 @@ public interface CourseRepository extends MongoRepository<Course, String> {
     Page<Course> findAllByInstructorIdAndDeletedAtIsNull(String instructorId, Pageable pageable);
 
     boolean existsByIdAndInstructorIdAndDeletedAtIsNull(String id, String instructorId);
+
+    List<Course> findAllByIdInAndDeletedAtIsNull(Collection<String> ids);
+
+    List<Course> findAllByIdInAndStatusAndDeletedAtIsNull(Collection<String> ids, CourseStatus status);
 }

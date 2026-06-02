@@ -1,0 +1,33 @@
+server:
+  port: 8090
+
+services:
+  auth-service:
+    url: http://localhost:8080
+  user-service:
+    url: http://localhost:8081
+  course-service:
+    url: http://localhost:8083
+  enrollment-service:
+    url: http://localhost:8084
+  payment-service:
+    url: http://localhost:8087
+  review-service:
+    url: http://localhost:8086
+
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,PATCH,OPTIONS}
+  allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With,Range}
+  exposed-headers: ${CORS_EXPOSED_HEADERS:Accept-Ranges,Content-Range,Content-Length,Content-Type}
+  allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
