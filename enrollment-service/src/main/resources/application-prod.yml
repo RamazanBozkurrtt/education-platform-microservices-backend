@@ -1,0 +1,51 @@
+server:
+  port: ${ENROLLMENT_SERVICE_PORT}
+
+spring:
+  datasource:
+    url: ${ENROLLMENT_DB_URL}
+    username: ${ENROLLMENT_DB_USERNAME}
+    password: ${ENROLLMENT_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL}
+  user-service:
+    url: ${USER_SERVICE_URL}
+  course-service:
+    url: ${COURSE_SERVICE_URL}
+
+app:
+  internal:
+    api-key: ${INTERNAL_API_KEY}
+
+grpc:
+  client:
+    user:
+      host: ${USER_GRPC_HOST}
+      port: ${USER_GRPC_PORT}
+    course:
+      host: ${COURSE_GRPC_HOST}
+      port: ${COURSE_GRPC_PORT}
+    payment:
+      host: ${PAYMENT_GRPC_HOST}
+      port: ${PAYMENT_GRPC_PORT}
+
+management:
+  endpoint:
+    health:
+      show-details: never

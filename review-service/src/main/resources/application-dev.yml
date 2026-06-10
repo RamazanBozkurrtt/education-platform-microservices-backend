@@ -1,0 +1,30 @@
+server:
+  port: 8086
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5436/edubase_review_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+services:
+  api-gateway:
+    url: http://localhost:8090
+  course-service:
+    url: http://localhost:8083
+
+management:
+  endpoint:
+    health:
+      show-details: always

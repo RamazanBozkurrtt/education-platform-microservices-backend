@@ -1,0 +1,50 @@
+server:
+  port: 8084
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5434/edubase_enrollment_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:9092
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: edubase-auth
+  audience: api-gateway
+
+services:
+  api-gateway:
+    url: http://localhost:8090
+  user-service:
+    url: http://localhost:8081
+  course-service:
+    url: http://localhost:8083
+
+app:
+  internal:
+    api-key: local-internal-api-key
+
+grpc:
+  client:
+    user:
+      host: localhost
+      port: 9091
+    course:
+      host: localhost
+      port: 9093
+    payment:
+      host: localhost
+      port: 9095
+
+management:
+  endpoint:
+    health:
+      show-details: always

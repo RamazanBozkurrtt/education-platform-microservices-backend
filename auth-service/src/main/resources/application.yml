@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: auth-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 2h
+  refreshTokenExpiration: 4h
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+app:
+  gateway-url: ${API_BASE_URL:${services.api-gateway.url}}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL}
+  password-reset:
+    token-expiration: ${PASSWORD_RESET_TOKEN_EXPIRATION:15m}
+  gmail:
+    enabled: ${GMAIL_ENABLED:true}
+    username: ${GMAIL_USERNAME:}
+    password: ${GMAIL_APP_PASSWORD:}
+    keys-file: ${GMAIL_KEYS_FILE:keys.json}
+  kafka:
+    topics:
+      user-registered: ${KAFKA_TOPIC_USER_REGISTERED:user.registered.v1}
+  account-reactivation:
+    token-expiration: 2h

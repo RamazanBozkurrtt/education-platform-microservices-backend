@@ -1,0 +1,96 @@
+server:
+  port: ${COURSE_SERVICE_PORT:8083}
+
+spring:
+  application:
+    name: course-service
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  servlet:
+    multipart:
+      max-file-size: ${COURSE_MEDIA_MAX_FILE_SIZE:2GB}
+      max-request-size: ${COURSE_MEDIA_MAX_REQUEST_SIZE:2100MB}
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: ${KAFKA_GROUP_COURSE_SERVICE:course-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.edubase.commonCore.events
+        spring.json.value.default.type: com.edubase.commonCore.events.InstructorLifecycleEvent
+        spring.json.use.type.headers: false
+    listener:
+      ack-mode: record
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+course:
+  progress:
+    completion-threshold-percentage: ${COURSE_PROGRESS_COMPLETION_THRESHOLD_PERCENTAGE:90}
+  media:
+    base-path: ${COURSE_MEDIA_BASE_PATH:videos}
+    image-base-path: ${COURSE_IMAGE_BASE_PATH:images/courses}
+    exam-image-base-path: ${COURSE_EXAM_IMAGE_BASE_PATH:images/final-exams}
+    playback-signing-key: ${COURSE_MEDIA_PLAYBACK_SIGNING_KEY:${JWT_SECRET}}
+    playback-url-ttl-seconds: ${COURSE_MEDIA_PLAYBACK_URL_TTL_SECONDS:900}
+    minio:
+      endpoint: ${COURSE_MEDIA_MINIO_ENDPOINT}
+      access-key: ${COURSE_MEDIA_MINIO_ACCESS_KEY}
+      secret-key: ${COURSE_MEDIA_MINIO_SECRET_KEY}
+      bucket: ${COURSE_MEDIA_MINIO_BUCKET}
+      auto-create-bucket: ${COURSE_MEDIA_MINIO_AUTO_CREATE_BUCKET}
+  sample:
+    enabled: ${COURSE_SAMPLE_ENABLED:true}
+
+grpc:
+  server:
+    port: ${COURSE_GRPC_PORT:9093}
+  client:
+    user:
+      host: ${USER_GRPC_HOST:localhost}
+      port: ${USER_GRPC_PORT:9091}
+
+app:
+  gateway-url: ${services.api-gateway.url}
+  kafka:
+    topics:
+      instructor-lifecycle: ${KAFKA_TOPIC_INSTRUCTOR_LIFECYCLE:instructor.lifecycle.v1}
+      course-search-sync: ${KAFKA_TOPIC_COURSE_SEARCH_SYNC:course.search.sync.v1}
+  internal:
+    api-key: ${INTERNAL_API_KEY}
+    enrollment-service-base-url: ${ENROLLMENT_SERVICE_INTERNAL_BASE_URL:${services.enrollment-service.url}}
+    user-service-base-url: ${services.user-service.url}
+
+recommendation:
+  service:
+    base-url: ${RECOMMENDATION_SERVICE_BASE_URL}
+    connect-timeout-ms: ${RECOMMENDATION_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${RECOMMENDATION_SERVICE_READ_TIMEOUT_MS:5000}
+  candidate-limit: ${RECOMMENDATION_CANDIDATE_LIMIT:150}
+  default-preferred-duration-seconds: ${RECOMMENDATION_DEFAULT_PREFERRED_DURATION_SECONDS:5400}
+  recent-course-limit: ${RECOMMENDATION_RECENT_COURSE_LIMIT:5}
+  dropout-low-progress-threshold-percent: ${RECOMMENDATION_DROPOUT_LOW_PROGRESS_THRESHOLD_PERCENT:25}
+
+media:
+  ffprobe-path: ${FFMPEG_FFPROBE_PATH:ffprobe}

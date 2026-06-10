@@ -1,0 +1,55 @@
+package com.edubase.course.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class LessonCreateRequest {
+
+    @NotBlank(message = "Title is required")
+    @Size(max = 200, message = "Title must be at most 200 characters")
+    private String title;
+
+    @NotBlank(message = "Summary title is required")
+    @Size(max = 80, message = "Summary title must be at most 80 characters")
+    @Pattern(regexp = "^\\S+(?:\\s+\\S+)?$", message = "Summary title must be 1 or 2 words")
+    private String summaryTitle;
+
+    @Size(max = 1000, message = "Video URL must be at most 1000 characters")
+    private String videoUrl;
+
+    @Positive(message = "Duration must be positive")
+    private Integer duration;
+
+    @Positive(message = "Duration seconds must be positive")
+    private Integer durationSeconds;
+
+    @NotNull(message = "Order index is required")
+    @PositiveOrZero(message = "Order index must be zero or positive")
+    private Integer orderIndex;
+
+    private boolean completed;
+
+    public LessonCreateRequest(String title,
+                               String summaryTitle,
+                               String videoUrl,
+                               Integer duration,
+                               Integer orderIndex,
+                               boolean completed) {
+        this.title = title;
+        this.summaryTitle = summaryTitle;
+        this.videoUrl = videoUrl;
+        this.duration = duration;
+        this.orderIndex = orderIndex;
+        this.completed = completed;
+    }
+}

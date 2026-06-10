@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package edubase.user.v1;
+
+option java_package = "com.edubase.contracts.user.v1";
+option java_multiple_files = true;
+option java_outer_classname = "UserQueryProto";
+
+service UserQueryService {
+  rpc GetUserByAuthId (UserByAuthIdRequest) returns (UserByAuthIdResponse);
+}
+
+message UserByAuthIdRequest {
+  int64 auth_user_id = 1;
+}
+
+message UserByAuthIdResponse {
+  int64 auth_user_id = 1;
+  bool exists = 2;
+  string email = 3;
+}

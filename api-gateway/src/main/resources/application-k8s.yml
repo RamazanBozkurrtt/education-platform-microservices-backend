@@ -1,0 +1,33 @@
+server:
+  port: 8090
+
+services:
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:8080}
+  user-service:
+    url: ${USER_SERVICE_URL:http://user-service:8081}
+  course-service:
+    url: ${COURSE_SERVICE_URL:http://course-service:8083}
+  enrollment-service:
+    url: ${ENROLLMENT_SERVICE_URL:http://enrollment-service:8084}
+  payment-service:
+    url: ${PAYMENT_SERVICE_URL:http://payment-service:8087}
+  review-service:
+    url: ${REVIEW_SERVICE_URL:http://review-service:8086}
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:30080,http://127.0.0.1:30080,http://localhost:30090,http://127.0.0.1:30090,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000}
+  allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,PATCH,OPTIONS}
+  allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With,Range}
+  exposed-headers: ${CORS_EXPOSED_HEADERS:Accept-Ranges,Content-Range,Content-Length,Content-Type}
+  allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}

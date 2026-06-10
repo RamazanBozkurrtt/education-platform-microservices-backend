@@ -1,0 +1,187 @@
+server:
+  port: ${API_GATEWAY_PORT:8090}
+
+jwt:
+  secret: ${JWT_SECRET}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+auth:
+  debug: ${AUTH_DEBUG:false}
+
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: ${cors.allowed-origins}
+            allowedMethods: ${cors.allowed-methods}
+            allowedHeaders: ${cors.allowed-headers}
+            exposedHeaders: ${cors.exposed-headers}
+            allowCredentials: ${cors.allow-credentials}
+      routes:
+        - id: auth-service-route
+          uri: ${services.auth-service.url}
+          predicates:
+            - Path=/api/v1/auth/**
+
+        - id: user-service-route
+          uri: ${services.user-service.url}
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_USER_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_USER_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: instructor-service-route
+          uri: ${services.user-service.url}
+          predicates:
+            - Path=/api/v1/instructors/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_USER_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_USER_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: course-service-route
+          uri: ${services.course-service.url}
+          predicates:
+            - Path=/courses/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: course-service-route-v1
+          uri: ${services.course-service.url}
+          predicates:
+            - Path=/api/v1/courses/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: enrollment-service-route
+          uri: ${services.enrollment-service.url}
+          predicates:
+            - Path=/api/v1/enrollments/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_ENROLLMENT_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ENROLLMENT_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: payment-service-route
+          uri: ${services.payment-service.url}
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_PAYMENT_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_PAYMENT_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: review-service-route
+          uri: ${services.review-service.url}
+          predicates:
+            - Path=/api/v1/reviews/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_REVIEW_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_REVIEW_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: recommendation-service-route
+          uri: ${services.course-service.url}
+          predicates:
+            - Path=/api/v1/recommendations/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@rateLimitKeyResolver}"
+                redis-rate-limiter.replenishRate: ${RATE_LIMIT_COURSE_REPLENISH:20}
+                redis-rate-limiter.burstCapacity: ${RATE_LIMIT_COURSE_BURST:40}
+                redis-rate-limiter.requestedTokens: 1
+        - id: media-service-route
+          uri: ${services.course-service.url}
+          predicates:
+            - Path=/api/v1/media/**
+        - id: auth-service-docs
+          uri: ${services.auth-service.url}
+          predicates:
+            - Path=/v3/api-docs/auth
+          filters:
+            - SetPath=/v3/api-docs
+        - id: user-service-docs
+          uri: ${services.user-service.url}
+          predicates:
+            - Path=/v3/api-docs/user
+          filters:
+            - SetPath=/v3/api-docs
+        - id: course-service-docs
+          uri: ${services.course-service.url}
+          predicates:
+            - Path=/v3/api-docs/course
+          filters:
+            - SetPath=/v3/api-docs
+        - id: enrollment-service-docs
+          uri: ${services.enrollment-service.url}
+          predicates:
+            - Path=/v3/api-docs/enrollment
+          filters:
+            - SetPath=/v3/api-docs
+        - id: payment-service-docs
+          uri: ${services.payment-service.url}
+          predicates:
+            - Path=/v3/api-docs/payment
+          filters:
+            - SetPath=/v3/api-docs
+        - id: review-service-docs
+          uri: ${services.review-service.url}
+          predicates:
+            - Path=/v3/api-docs/review
+          filters:
+            - SetPath=/v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    disable-swagger-default-url: true
+    path: /swagger-ui
+    urls-primary-name: auth-service
+    urls:
+      - name: auth-service
+        url: /v3/api-docs/auth
+      - name: user-service
+        url: /v3/api-docs/user
+      - name: course-service
+        url: /v3/api-docs/course
+      - name: enrollment-service
+        url: /v3/api-docs/enrollment
+      - name: payment-service
+        url: /v3/api-docs/payment
+      - name: review-service
+        url: /v3/api-docs/review

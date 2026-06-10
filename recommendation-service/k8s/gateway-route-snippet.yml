@@ -1,0 +1,8 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: ai-service-recommendations
+          uri: http://ai-service:8000
+          predicates:
+            - Path=/api/v1/recommendations/**

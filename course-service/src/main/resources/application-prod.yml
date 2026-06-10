@@ -1,0 +1,55 @@
+spring:
+  datasource:
+    url: ${COURSE_PROJECTION_DB_URL}
+    username: ${COURSE_PROJECTION_DB_USERNAME}
+    password: ${COURSE_PROJECTION_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  cache:
+    type: ${CACHE_TYPE}
+  data:
+    mongodb:
+      uri: ${MONGODB_URI}
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+auth:
+  debug: ${AUTH_DEBUG:false}
+
+jwt:
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL}
+  user-service:
+    url: ${USER_SERVICE_URL}
+  enrollment-service:
+    url: ${ENROLLMENT_SERVICE_URL}
+
+app:
+  internal:
+    api-key: ${INTERNAL_API_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+grpc:
+  server:
+    port: ${COURSE_GRPC_PORT}
+  client:
+    user:
+      host: ${USER_GRPC_HOST}
+      port: ${USER_GRPC_PORT}

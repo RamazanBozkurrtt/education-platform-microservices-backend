@@ -1,0 +1,50 @@
+server:
+  port: ${USER_SERVICE_PORT}
+
+spring:
+  datasource:
+    url: ${USER_DB_URL}
+    username: ${USER_DB_USERNAME}
+    password: ${USER_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+
+services:
+  api-gateway:
+    url: ${API_GATEWAY_URL}
+  auth-service:
+    url: ${AUTH_SERVICE_URL}
+
+user:
+  media:
+    minio:
+      endpoint: ${USER_MEDIA_MINIO_ENDPOINT}
+      access-key: ${USER_MEDIA_MINIO_ACCESS_KEY}
+      secret-key: ${USER_MEDIA_MINIO_SECRET_KEY}
+      bucket: ${USER_MEDIA_MINIO_BUCKET}
+      auto-create-bucket: ${USER_MEDIA_MINIO_AUTO_CREATE_BUCKET}
+
+grpc:
+  server:
+    port: ${USER_GRPC_PORT}
+
+management:
+  endpoint:
+    health:
+      show-details: never
