@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CourseServiceImpl implements CourseService {
 
-    private static final int MAX_REASONABLE_VIDEO_DURATION_SECONDS = 24 * 60 * 60;
+    private static final int MAX_REASONABLE_LESSON_DURATION_SECONDS = 90 * 24 * 60 * 60;
 
     private static final String PUBLIC_COURSE_IMAGE_PATH_TEMPLATE = "/courses/public/%s/image";
 
@@ -76,6 +76,7 @@ public class CourseServiceImpl implements CourseService {
     private final InstructorProjectionReconciliationService reconciliationService;
     private final CourseSearchSyncKafkaPublisher courseSearchSyncKafkaPublisher;
     private final FinalExamPublishValidationService finalExamPublishValidationService;
+    private final EnrollmentAccessClient enrollmentAccessClient;
 
     @Override
     @PreAuthorize("@courseSecurity.isAdminOrInstructor(#p0)")
@@ -214,7 +215,7 @@ public class CourseServiceImpl implements CourseService {
         lesson.setId(UUID.randomUUID().toString());
         lesson.setVideoUrl(null);
         lesson.setVideoUpdatedAt(null);
-        lesson.setDuration(null);
+        lesson.setDuration(resolveRequestDurationSeconds(request.getDurationSeconds(), request.getDuration()));
         lessons.add(lesson);
         sortLessons(lessons);
 
@@ -240,7 +241,8 @@ public class CourseServiceImpl implements CourseService {
         lessonMapper.updateLessonFromRequest(request, lesson);
         lesson.setVideoUrl(existingVideoUrl);
         lesson.setVideoUpdatedAt(existingVideoUpdatedAt);
-        lesson.setDuration(existingDuration);
+        Integer requestedDuration = resolveRequestDurationSeconds(request.getDurationSeconds(), request.getDuration());
+        lesson.setDuration(requestedDuration != null ? requestedDuration : existingDuration);
         sortLessons(ensureLessons(course));
 
         Course saved = courseRepository.save(course);
@@ -326,6 +328,7 @@ public class CourseServiceImpl implements CourseService {
         response.setCategoryId(resolvePrimaryCategoryId(normalizedCategoryIds));
         response.setCategory(resolvePrimaryCategory(categories));
         response.setLevel(resolveLevel(response.getLevelId()));
+        response.setStudentsCount(resolveStudentsCount(response.getId()));
         if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
             return response;
         }
@@ -358,6 +361,16 @@ public class CourseServiceImpl implements CourseService {
         Map<String, InstructorSummaryResponse> summariesById =
                 instructorProjectionService.findSummariesByInstructorIds(instructorIds);
 
+        Map<String, Long> studentsCountByCourseId = enrollmentAccessClient.countSuccessfulEnrollmentsByCourseIds(
+                responses.stream()
+                        .map(CourseResponse::getId)
+                        .filter(this::hasText)
+                        .collect(Collectors.toCollection(LinkedHashSet::new))
+        );
+        if (studentsCountByCourseId == null) {
+            studentsCountByCourseId = Map.of();
+        }
+
         for (CourseResponse response : responses) {
             sanitizeLessonDurations(response.getLessons());
             setCourseDurationFields(response, calculateTotalDurationSeconds(response.getLessons()));
@@ -373,6 +386,7 @@ public class CourseServiceImpl implements CourseService {
             response.setCategory(resolvePrimaryCategory(categories));
             String normalizedLevelId = normalizeLevelId(response.getLevelId());
             response.setLevel(normalizedLevelId == null ? null : levelsById.get(normalizedLevelId));
+            response.setStudentsCount(resolveStudentsCount(studentsCountByCourseId, response.getId()));
             if (response.getInstructorId() == null || response.getInstructorId().isBlank()) {
                 continue;
             }
@@ -656,7 +670,14 @@ public class CourseServiceImpl implements CourseService {
     }
 
     private boolean isReasonableLessonDuration(Integer duration) {
-        return duration != null && duration > 0 && duration <= MAX_REASONABLE_VIDEO_DURATION_SECONDS;
+        return duration != null && duration > 0 && duration <= MAX_REASONABLE_LESSON_DURATION_SECONDS;
+    }
+
+    private Integer resolveRequestDurationSeconds(Integer durationSeconds, Integer legacyDuration) {
+        if (isReasonableLessonDuration(durationSeconds)) {
+            return durationSeconds;
+        }
+        return isReasonableLessonDuration(legacyDuration) ? legacyDuration : null;
     }
 
     private String buildPublicCourseImageUrl(String courseId) {
@@ -664,5 +685,23 @@ public class CourseServiceImpl implements CourseService {
             return null;
         }
         return PUBLIC_COURSE_IMAGE_PATH_TEMPLATE.formatted(courseId);
+    }
+
+    private long resolveStudentsCount(String courseId) {
+        if (!hasText(courseId)) {
+            return 0L;
+        }
+        Map<String, Long> counts = enrollmentAccessClient.countSuccessfulEnrollmentsByCourseIds(List.of(courseId));
+        if (counts == null) {
+            return 0L;
+        }
+        return counts.getOrDefault(courseId, 0L);
+    }
+
+    private long resolveStudentsCount(Map<String, Long> counts, String courseId) {
+        if (counts == null || !hasText(courseId)) {
+            return 0L;
+        }
+        return counts.getOrDefault(courseId, 0L);
     }
 }

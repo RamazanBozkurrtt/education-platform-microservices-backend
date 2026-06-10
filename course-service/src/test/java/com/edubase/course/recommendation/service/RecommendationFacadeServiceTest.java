@@ -61,6 +61,7 @@ class RecommendationFacadeServiceTest {
                 .level("Beginner")
                 .durationSeconds(3600L)
                 .lessonCount(12)
+                .enrollmentCount(42L)
                 .thumbnailUrl("/courses/public/course-1/image")
                 .createdAt(Instant.parse("2026-05-29T09:00:00Z"))
                 .build();
@@ -92,6 +93,7 @@ class RecommendationFacadeServiceTest {
         assertEquals("Beginner", first.getLevel());
         assertEquals(3600L, first.getDurationSeconds());
         assertEquals(12, first.getLessonCount());
+        assertEquals(42L, first.getStudentsCount());
         assertEquals("/courses/public/course-1/image", first.getThumbnailUrl());
         assertEquals(0.91d, first.getScore());
         assertEquals("Semantic match", first.getReason());

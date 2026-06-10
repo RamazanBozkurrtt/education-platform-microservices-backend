@@ -47,6 +47,7 @@ public class CourseResponse {
     private Integer duration;
     private Integer durationSeconds;
     private Integer totalDurationSeconds;
+    private Long studentsCount;
     private Instant createdAt;
     private Instant updatedAt;
     private List<LessonResponse> lessons;

@@ -21,6 +21,7 @@ public class CourseRecommendationResponse {
     private Long durationSeconds;
     private Integer lessonCount;
     private Double rating;
+    private Long studentsCount;
     private String thumbnailUrl;
     private Double score;
     private String reason;

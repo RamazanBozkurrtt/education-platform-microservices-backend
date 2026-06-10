@@ -47,6 +47,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -202,8 +203,8 @@ public class CourseMediaServiceImpl implements CourseMediaService {
             log.info("VIDEO_DURATION_COMPUTED | courseId={} lessonId={} durationSeconds={}",
                     course.getId(), lesson.getId(), durationSeconds);
         } else {
-            lesson.setDuration(0);
-            log.warn("VIDEO_DURATION_UNAVAILABLE | courseId={} lessonId={}", course.getId(), lesson.getId());
+            log.warn("VIDEO_DURATION_UNAVAILABLE | courseId={} lessonId={} existingDurationSeconds={}",
+                    course.getId(), lesson.getId(), lesson.getDuration());
         }
         course.setUpdatedAt(Instant.now());
         Course saved = courseRepository.save(course);
@@ -329,13 +330,28 @@ public class CourseMediaServiceImpl implements CourseMediaService {
     }
 
     public Integer resolveVideoDurationSeconds(MultipartFile file) {
-        Integer ffprobeDuration = resolveDurationWithFfprobe(file);
-        if (isReasonableVideoDuration(ffprobeDuration)) {
-            return ffprobeDuration;
-        }
-        if (ffprobeDuration != null && ffprobeDuration > 0) {
-            log.warn("VIDEO_DURATION_UNREASONABLE_FFPROBE_VALUE | durationSeconds={} file={}",
-                    ffprobeDuration, file.getOriginalFilename());
+        Path tempFile = null;
+        try {
+            tempFile = copyToTempVideoFile(file);
+            Integer ffprobeDuration = resolveDurationWithFfprobe(tempFile, file.getOriginalFilename());
+            if (isReasonableVideoDuration(ffprobeDuration)) {
+                return ffprobeDuration;
+            }
+            if (ffprobeDuration != null && ffprobeDuration > 0) {
+                log.warn("VIDEO_DURATION_UNREASONABLE_FFPROBE_VALUE | durationSeconds={} file={}",
+                        ffprobeDuration, file.getOriginalFilename());
+            }
+
+            Integer movieHeaderDuration = resolveDurationFromMp4MovieHeader(tempFile);
+            if (isReasonableVideoDuration(movieHeaderDuration)) {
+                return movieHeaderDuration;
+            }
+            if (movieHeaderDuration != null && movieHeaderDuration > 0) {
+                log.warn("VIDEO_DURATION_UNREASONABLE_MVHD_VALUE | durationSeconds={} file={}",
+                        movieHeaderDuration, file.getOriginalFilename());
+            }
+        } finally {
+            deleteTempFileQuietly(tempFile);
         }
 
         try (var inputStream = file.getInputStream()) {
@@ -358,23 +374,32 @@ public class CourseMediaServiceImpl implements CourseMediaService {
         }
     }
 
-    private Integer resolveDurationWithFfprobe(MultipartFile file) {
-        Path tempFile = null;
+    private Path copyToTempVideoFile(MultipartFile file) {
         try {
-            tempFile = Files.createTempFile("course-video-duration-", ".mp4");
+            Path tempFile = Files.createTempFile("course-video-duration-", ".mp4");
             try (InputStream inputStream = file.getInputStream()) {
                 Files.copy(inputStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
             }
+            return tempFile;
+        } catch (Exception ex) {
+            log.warn("VIDEO_DURATION_TEMP_FILE_ERROR | file={} msg={}", file.getOriginalFilename(), ex.getMessage());
+            return null;
+        }
+    }
+
+    private Integer resolveDurationWithFfprobe(Path tempFile, String originalFilename) {
+        if (tempFile == null) {
+            return null;
+        }
+        try {
             return videoDurationService.extractDurationSeconds(tempFile)
                     .stream()
                     .boxed()
                     .findFirst()
                     .orElse(null);
         } catch (Exception ex) {
-            log.warn("VIDEO_DURATION_FFPROBE_PIPELINE_ERROR | msg={}", ex.getMessage());
+            log.warn("VIDEO_DURATION_FFPROBE_PIPELINE_ERROR | file={} msg={}", originalFilename, ex.getMessage());
             return null;
-        } finally {
-            deleteTempFileQuietly(tempFile);
         }
     }
 
@@ -747,6 +772,113 @@ public class CourseMediaServiceImpl implements CourseMediaService {
         }
 
         return best;
+    }
+
+    private Integer resolveDurationFromMp4MovieHeader(Path videoPath) {
+        if (videoPath == null || !Files.exists(videoPath)) {
+            return null;
+        }
+        try (RandomAccessFile file = new RandomAccessFile(videoPath.toFile(), "r")) {
+            return findMovieHeaderDuration(file, 0L, file.length(), 0);
+        } catch (Exception ex) {
+            log.warn("VIDEO_DURATION_MVHD_PARSE_ERROR | file={} msg={}", videoPath.getFileName(), ex.getMessage());
+            return null;
+        }
+    }
+
+    private Integer findMovieHeaderDuration(RandomAccessFile file, long start, long end, int depth) throws IOException {
+        if (depth > 3 || start < 0 || end <= start) {
+            return null;
+        }
+
+        long position = start;
+        while (position + 8L <= end) {
+            file.seek(position);
+            long atomSize = readUnsignedInt(file);
+            String atomType = readAtomType(file);
+            long headerSize = 8L;
+
+            if (atomSize == 1L) {
+                if (position + 16L > end) {
+                    return null;
+                }
+                atomSize = file.readLong();
+                headerSize = 16L;
+            } else if (atomSize == 0L) {
+                atomSize = end - position;
+            }
+
+            if (atomSize < headerSize || position + atomSize > end) {
+                return null;
+            }
+
+            long contentStart = position + headerSize;
+            long contentEnd = position + atomSize;
+            if ("mvhd".equals(atomType)) {
+                return readMovieHeaderDurationSeconds(file, contentStart, contentEnd);
+            }
+            if ("moov".equals(atomType)) {
+                Integer duration = findMovieHeaderDuration(file, contentStart, contentEnd, depth + 1);
+                if (duration != null) {
+                    return duration;
+                }
+            }
+
+            position += atomSize;
+        }
+
+        return null;
+    }
+
+    private Integer readMovieHeaderDurationSeconds(RandomAccessFile file, long contentStart, long contentEnd) throws IOException {
+        if (contentStart + 20L > contentEnd) {
+            return null;
+        }
+
+        file.seek(contentStart);
+        int version = file.readUnsignedByte();
+        file.skipBytes(3);
+
+        long timescale;
+        double durationUnits;
+        if (version == 1) {
+            if (contentStart + 32L > contentEnd) {
+                return null;
+            }
+            file.skipBytes(16);
+            timescale = readUnsignedInt(file);
+            durationUnits = unsignedLongToDouble(file.readLong());
+        } else {
+            file.skipBytes(8);
+            timescale = readUnsignedInt(file);
+            durationUnits = readUnsignedInt(file);
+        }
+
+        if (timescale <= 0L || durationUnits <= 0d) {
+            return null;
+        }
+        double seconds = durationUnits / timescale;
+        if (!Double.isFinite(seconds) || seconds <= 0d || seconds > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) Math.ceil(seconds);
+    }
+
+    private long readUnsignedInt(RandomAccessFile file) throws IOException {
+        return Integer.toUnsignedLong(file.readInt());
+    }
+
+    private String readAtomType(RandomAccessFile file) throws IOException {
+        byte[] type = new byte[4];
+        file.readFully(type);
+        return new String(type, StandardCharsets.ISO_8859_1);
+    }
+
+    private double unsignedLongToDouble(long value) {
+        if (value >= 0L) {
+            return (double) value;
+        }
+        return (double) (value & Long.MAX_VALUE) + Math.pow(2.0d, 63.0d);
     }
 
     private Integer parseDurationDescription(String value) {

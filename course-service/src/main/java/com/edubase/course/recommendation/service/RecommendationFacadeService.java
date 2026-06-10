@@ -171,6 +171,7 @@ public class RecommendationFacadeService {
                         .durationSeconds(course.getDurationSeconds())
                         .lessonCount(course.getLessonCount())
                         .rating(course.getRating())
+                        .studentsCount(safeLong(course.getEnrollmentCount()))
                         .thumbnailUrl(course.getThumbnailUrl())
                         .score(item.getScore() == null ? 0.0d : item.getScore())
                         .reason(hasText(item.getReason()) ? item.getReason().trim() : defaultReason(context))

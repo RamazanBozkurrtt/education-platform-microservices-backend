@@ -30,9 +30,26 @@ public class LessonUpdateRequest {
     @Positive(message = "Duration must be positive")
     private Integer duration;
 
+    @Positive(message = "Duration seconds must be positive")
+    private Integer durationSeconds;
+
     @NotNull(message = "Order index is required")
     @PositiveOrZero(message = "Order index must be zero or positive")
     private Integer orderIndex;
 
     private boolean completed;
+
+    public LessonUpdateRequest(String title,
+                               String summaryTitle,
+                               String videoUrl,
+                               Integer duration,
+                               Integer orderIndex,
+                               boolean completed) {
+        this.title = title;
+        this.summaryTitle = summaryTitle;
+        this.videoUrl = videoUrl;
+        this.duration = duration;
+        this.orderIndex = orderIndex;
+        this.completed = completed;
+    }
 }

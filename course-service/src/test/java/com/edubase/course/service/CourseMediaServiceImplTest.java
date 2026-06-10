@@ -26,8 +26,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -97,7 +99,7 @@ class CourseMediaServiceImplTest {
     }
 
     @Test
-    void uploadLessonVideo_whenDurationCannotBeParsed_setsZeroDurationFallback() {
+    void uploadLessonVideo_whenDurationCannotBeParsed_preservesExistingDuration() {
         Lesson lesson = Lesson.builder().id("lesson-1").duration(120).build();
         Course course = Course.builder()
                 .id("course-1")
@@ -114,7 +116,7 @@ class CourseMediaServiceImplTest {
 
         courseMediaService.uploadLessonVideo(authContext, "course-1", "lesson-1", file);
 
-        assertEquals(0, lesson.getDuration());
+        assertEquals(120, lesson.getDuration());
         assertNotNull(lesson.getVideoUpdatedAt());
         verify(courseRepository).save(course);
         verify(courseSearchSyncKafkaPublisher).publishUpsert(course);
@@ -298,5 +300,33 @@ class CourseMediaServiceImplTest {
 
         Integer parsed = ReflectionTestUtils.invokeMethod(courseMediaService, "extractDurationSeconds", metadata);
         assertEquals(191, parsed);
+    }
+
+    @Test
+    void resolveVideoDurationSeconds_shouldReadMp4MovieHeaderWhenFfprobeIsUnavailable() {
+        MockMultipartFile file = new MockMultipartFile("file", "lesson.mp4", "video/mp4", mp4WithMovieHeader(1_000, 191_200));
+        when(videoDurationService.extractDurationSeconds(any())).thenReturn(OptionalInt.empty());
+
+        Integer durationSeconds = courseMediaService.resolveVideoDurationSeconds(file);
+
+        assertEquals(192, durationSeconds);
+    }
+
+    private byte[] mp4WithMovieHeader(int timescale, int durationUnits) {
+        ByteBuffer buffer = ByteBuffer.allocate(48);
+        buffer.putInt(12);
+        buffer.put(new byte[]{'f', 't', 'y', 'p'});
+        buffer.put(new byte[]{'i', 's', 'o', 'm'});
+        buffer.putInt(36);
+        buffer.put(new byte[]{'m', 'o', 'o', 'v'});
+        buffer.putInt(28);
+        buffer.put(new byte[]{'m', 'v', 'h', 'd'});
+        buffer.put((byte) 0);
+        buffer.put(new byte[]{0, 0, 0});
+        buffer.putInt(0);
+        buffer.putInt(0);
+        buffer.putInt(timescale);
+        buffer.putInt(durationUnits);
+        return buffer.array();
     }
 }
