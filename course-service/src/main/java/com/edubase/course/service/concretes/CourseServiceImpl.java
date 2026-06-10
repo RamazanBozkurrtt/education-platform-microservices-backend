@@ -215,7 +215,7 @@ public class CourseServiceImpl implements CourseService {
         lesson.setId(UUID.randomUUID().toString());
         lesson.setVideoUrl(null);
         lesson.setVideoUpdatedAt(null);
-        lesson.setDuration(resolveRequestDurationSeconds(request.getDuration()));
+        lesson.setDuration(resolveRequestDurationSeconds(request.getDurationSeconds(), request.getDuration()));
         lessons.add(lesson);
         sortLessons(lessons);
 
@@ -241,7 +241,7 @@ public class CourseServiceImpl implements CourseService {
         lessonMapper.updateLessonFromRequest(request, lesson);
         lesson.setVideoUrl(existingVideoUrl);
         lesson.setVideoUpdatedAt(existingVideoUpdatedAt);
-        Integer requestedDuration = resolveRequestDurationSeconds(request.getDuration());
+        Integer requestedDuration = resolveRequestDurationSeconds(request.getDurationSeconds(), request.getDuration());
         lesson.setDuration(requestedDuration != null ? requestedDuration : existingDuration);
         sortLessons(ensureLessons(course));
 
@@ -673,8 +673,11 @@ public class CourseServiceImpl implements CourseService {
         return duration != null && duration > 0 && duration <= MAX_REASONABLE_LESSON_DURATION_SECONDS;
     }
 
-    private Integer resolveRequestDurationSeconds(Integer duration) {
-        return isReasonableLessonDuration(duration) ? duration : null;
+    private Integer resolveRequestDurationSeconds(Integer durationSeconds, Integer legacyDuration) {
+        if (isReasonableLessonDuration(durationSeconds)) {
+            return durationSeconds;
+        }
+        return isReasonableLessonDuration(legacyDuration) ? legacyDuration : null;
     }
 
     private String buildPublicCourseImageUrl(String courseId) {

@@ -318,6 +318,34 @@ class CourseServiceImplTest {
     }
 
     @Test
+    void addLesson_shouldPersistDurationSecondsRequestField() {
+        Course course = Course.builder()
+                .id("course-5b")
+                .title("Title")
+                .description("Desc")
+                .price(BigDecimal.ONE)
+                .status(CourseStatus.DRAFT)
+                .instructorId("5")
+                .lessons(new ArrayList<>())
+                .build();
+        LessonCreateRequest request = new LessonCreateRequest("Lesson", "Lesson Intro", "https://video", null, 0, false);
+        request.setDurationSeconds(360);
+        Lesson lesson = new Lesson();
+        CourseResponse response = CourseResponse.builder().id("course-5b").build();
+
+        when(courseRepository.findByIdAndDeletedAtIsNull("course-5b")).thenReturn(Optional.of(course));
+        when(lessonMapper.toEntityFromRequest(request)).thenReturn(lesson);
+        when(courseRepository.save(course)).thenReturn(course);
+        when(courseMapper.toResponseFromEntity(course)).thenReturn(response);
+
+        AuthContext authContext = new AuthContext("5", UserRole.INSTRUCTOR);
+        CourseResponse result = courseService.addLesson(authContext, "course-5b", request);
+
+        assertEquals("course-5b", result.getId());
+        assertEquals(360, course.getLessons().get(0).getDuration());
+    }
+
+    @Test
     void updateLesson_shouldPersistRequestDurationWhenProvided() {
         Lesson lesson = Lesson.builder()
                 .id("lesson-5")

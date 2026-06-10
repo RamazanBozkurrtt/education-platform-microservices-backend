@@ -27,6 +27,10 @@ FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/course-service/target/*.jar app.jar
 
 EXPOSE 8083
