@@ -8,6 +8,7 @@ Backend servisleri ağırlıklı olarak Spring Boot 3.2.3 ve Java 17 ile gelişt
 
 - [Mimari Özeti](#mimari-özeti)
 - [Teknoloji Yığını](#teknoloji-yığını)
+- [Gerekli Kütüphaneler ve Bağımlılıklar](#gerekli-kütüphaneler-ve-bağımlılıklar)
 - [Proje Yapısı](#proje-yapısı)
 - [Servisler ve Portlar](#servisler-ve-portlar)
 - [Docker Compose ile Çalıştırma](#docker-compose-ile-çalıştırma)
@@ -63,6 +64,78 @@ Genel akış:
 | Recommendation service | Python 3.11, FastAPI, sentence-transformers |
 | Container | Docker, Docker Compose |
 | Orkestrasyon | Kubernetes |
+
+## Gerekli Kütüphaneler ve Bağımlılıklar
+
+Projeyi çalıştırmak için iki farklı yol desteklenir. Docker/Docker Compose kullanıldığında Java, Maven, Python ve servis bağımlılıkları container imajları içinde hazırlanır. Lokal geliştirme yapılacaksa aşağıdaki araçların sistemde kurulu olması gerekir.
+
+### Sistem gereksinimleri
+
+| Bağımlılık | Gerekli sürüm / açıklama |
+| --- | --- |
+| Java JDK | 17 |
+| Maven | 3.9.x veya uyumlu güncel sürüm |
+| Docker | Docker Engine veya Docker Desktop |
+| Docker Compose | v2 |
+| Kubernetes CLI | `kubectl` |
+| Lokal Kubernetes | Minikube, kind veya Docker Desktop Kubernetes |
+| Python | 3.11, yalnızca `recommendation-service` lokal çalıştırılacaksa |
+
+### Java / Spring Boot bağımlılıkları
+
+Java servisleri Maven multi-module yapıdadır ve bağımlılıklar root [pom.xml](pom.xml) ile servis bazlı `pom.xml` dosyalarından yönetilir. Başlıca kullanılan kütüphaneler:
+
+- Spring Boot Starter Web, Validation, Security, Data JPA, Data MongoDB, Data Redis
+- Spring Cloud Gateway
+- Spring Kafka
+- Springdoc OpenAPI / Swagger UI
+- PostgreSQL JDBC Driver
+- Flyway Migration
+- Lombok
+- MapStruct
+- JJWT
+- gRPC ve Protocol Buffers
+- MinIO Java SDK
+- Elasticsearch client bağımlılıkları
+- JUnit, Mockito ve Spring Boot Test
+
+Maven bağımlılıklarını indirmek ve projeyi derlemek için:
+
+```bash
+mvn clean package
+```
+
+### Python / Recommendation service bağımlılıkları
+
+`recommendation-service` Python/FastAPI tabanlıdır. Bağımlılıklar [recommendation-service/requirements.txt](recommendation-service/requirements.txt) dosyasında tutulur:
+
+- FastAPI
+- Uvicorn
+- Pydantic
+- HTTPX
+- sentence-transformers
+- NumPy
+- scikit-learn
+
+Lokal Python ortamını hazırlamak için:
+
+```bash
+cd recommendation-service
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Altyapı bağımlılıkları
+
+Docker Compose veya Kubernetes ortamında aşağıdaki altyapı bileşenleri otomatik ayağa kaldırılır:
+
+- PostgreSQL 15
+- MongoDB 7
+- Redis 7
+- Kafka ve Zookeeper
+- Elasticsearch 8.13.4
+- MinIO
 
 ## Proje Yapısı
 
