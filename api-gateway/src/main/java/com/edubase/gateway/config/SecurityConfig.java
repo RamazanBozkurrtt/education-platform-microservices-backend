@@ -1,5 +1,6 @@
 package com.edubase.gateway.config;
 
+import com.edubase.commonCore.security.JwtSecretKeyProvider;
 import com.edubase.gateway.security.JwtAccessDeniedHandler;
 import com.edubase.gateway.security.JwtAuthenticationEntryPoint;
 import com.edubase.gateway.service.abstracts.RedisTokenService;
@@ -35,10 +36,7 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -115,7 +113,11 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                );
 
         return http.build();
     }
@@ -124,7 +126,7 @@ public class SecurityConfig {
     public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${jwt.secret}") String secret,
                                                  @Value("${jwt.issuer}") String issuer,
                                                  @Value("${jwt.audience}") String audience) {
-        SecretKey key = buildSecretKey(secret);
+        SecretKey key = JwtSecretKeyProvider.hmacSha256Key(secret);
         NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
@@ -139,7 +141,8 @@ public class SecurityConfig {
                                 }
                                 return Mono.just(jwt);
                             });
-                });
+                })
+                .doOnError(ex -> log.debug("JWT validation failed: {}", jwtFailureReason(ex)));
     }
 
     @Bean
@@ -212,25 +215,6 @@ public class SecurityConfig {
                 .collect(Collectors.toList());
     }
 
-    private SecretKey buildSecretKey(String secret) {
-        if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException("jwt.secret is missing. Set JWT_SECRET environment variable.");
-        }
-
-        byte[] keyBytes;
-        try {
-            keyBytes = Base64.getDecoder().decode(secret.trim());
-        } catch (IllegalArgumentException ex) {
-            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-        }
-
-        if (keyBytes.length < 32) {
-            throw new IllegalStateException("jwt.secret must be at least 32 bytes (or base64 value of 32+ bytes).");
-        }
-
-        return new SecretKeySpec(keyBytes, "HmacSHA256");
-    }
-
     private void validateIssuerAndAudience(Jwt jwt, String issuer, String audience) {
         if (issuer != null && !issuer.isBlank()) {
             String actualIssuer = jwt.getClaimAsString("iss");
@@ -245,5 +229,29 @@ public class SecurityConfig {
                 throw new BadJwtException("Invalid audience");
             }
         }
+    }
+
+    private String jwtFailureReason(Throwable ex) {
+        String message = ex.getMessage();
+        if (message == null) {
+            return ex.getClass().getSimpleName();
+        }
+        String normalized = message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("expired")) {
+            return "expired token";
+        }
+        if (normalized.contains("issuer")) {
+            return "invalid issuer";
+        }
+        if (normalized.contains("audience")) {
+            return "invalid audience";
+        }
+        if (normalized.contains("signature") || normalized.contains("mac")) {
+            return "invalid signature";
+        }
+        if (normalized.contains("blacklisted")) {
+            return "blacklisted token";
+        }
+        return message;
     }
 }

@@ -11,8 +11,8 @@ spring:
     bootstrap-servers: kafka:29092
 
 jwt:
-  issuer: edubase-auth
-  audience: api-gateway
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
 
 services:
   api-gateway:

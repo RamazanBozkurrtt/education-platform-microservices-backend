@@ -1,5 +1,6 @@
 package com.edubase.enrollment.configuration;
 
+import com.edubase.commonCore.security.JwtSecretKeyProvider;
 import com.edubase.enrollment.security.JwtAccessDeniedHandler;
 import com.edubase.enrollment.security.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
@@ -17,15 +18,13 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -118,35 +117,21 @@ public class SecurityConfig {
     public JwtDecoder jwtDecoder(@Value("${jwt.secret}") String secret,
                                  @Value("${jwt.issuer}") String issuer,
                                  @Value("${jwt.audience}") String audience) {
-        SecretKey key = buildSecretKey(secret);
+        SecretKey key = JwtSecretKeyProvider.hmacSha256Key(secret);
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
 
         return token -> {
-            Jwt jwt = decoder.decode(token);
-            validateIssuerAndAudience(jwt, issuer, audience);
-            return jwt;
+            try {
+                Jwt jwt = decoder.decode(token);
+                validateIssuerAndAudience(jwt, issuer, audience);
+                return jwt;
+            } catch (JwtException ex) {
+                log.debug("JWT validation failed: {}", jwtFailureReason(ex));
+                throw ex;
+            }
         };
-    }
-
-    private SecretKey buildSecretKey(String secret) {
-        if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException("jwt.secret is missing. Set JWT_SECRET environment variable.");
-        }
-
-        byte[] keyBytes;
-        try {
-            keyBytes = Base64.getDecoder().decode(secret.trim());
-        } catch (IllegalArgumentException ex) {
-            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-        }
-
-        if (keyBytes.length < 32) {
-            throw new IllegalStateException("jwt.secret must be at least 32 bytes (or base64 value of 32+ bytes).");
-        }
-
-        return new SecretKeySpec(keyBytes, "HmacSHA256");
     }
 
     private void validateIssuerAndAudience(Jwt jwt, String issuer, String audience) {
@@ -163,5 +148,26 @@ public class SecurityConfig {
                 throw new BadJwtException("Invalid audience");
             }
         }
+    }
+
+    private String jwtFailureReason(Throwable ex) {
+        String message = ex.getMessage();
+        if (message == null) {
+            return ex.getClass().getSimpleName();
+        }
+        String normalized = message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("expired")) {
+            return "expired token";
+        }
+        if (normalized.contains("issuer")) {
+            return "invalid issuer";
+        }
+        if (normalized.contains("audience")) {
+            return "invalid audience";
+        }
+        if (normalized.contains("signature") || normalized.contains("mac")) {
+            return "invalid signature";
+        }
+        return message;
     }
 }

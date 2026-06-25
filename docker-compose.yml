@@ -247,6 +247,8 @@ services:
       KAFKA_TOPIC_USER_REGISTERED: user.registered.v1
       GATEWAY_URL: http://api-gateway:8090
       JWT_SECRET: ${JWT_SECRET}
+      GMAIL_USERNAME: ${GMAIL_USERNAME}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
     expose:
       - "8080"
 

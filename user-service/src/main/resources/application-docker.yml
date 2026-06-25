@@ -21,8 +21,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
 jwt:
-  issuer: edubase-auth
-  audience: api-gateway
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
 
 services:
   api-gateway:

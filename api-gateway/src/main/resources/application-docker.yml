@@ -22,8 +22,8 @@ spring:
       port: 6379
 
 jwt:
-  issuer: edubase-auth
-  audience: api-gateway
+  issuer: ${JWT_ISSUER:edubase-auth}
+  audience: ${JWT_AUDIENCE:api-gateway}
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
